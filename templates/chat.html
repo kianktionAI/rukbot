@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RukVest Chat</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: "Nunito", Arial, sans-serif;
+      background: #fff;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .logo {
+      margin-top: 32px;
+      max-width: 320px;
+      width: 80vw;
+      height: auto;
+      display: block;
+    }
+    .chat-heading {
+      font-size: 2.2rem;
+      margin: 32px 0 24px 0;
+      text-align: center;
+      font-weight: 700;
+      color: #222;
+    }
+    .chat-heading .highlight {
+      color: #8cc63f;
+    }
+    .chat-container {
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 24px 16px 0 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .chat-form {
+      width: 100%;
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .chat-input {
+      flex: 1;
+      font-size: 1.2rem;
+      padding: 16px 14px;
+      border: 2px solid #8cc63f;
+      border-radius: 12px;
+      outline: none;
+      transition: border 0.2s;
+    }
+    .chat-input:focus {
+      border: 2px solid #6dbb2f;
+    }
+    .chat-send {
+      font-size: 1.2rem;
+      padding: 0 28px;
+      background: linear-gradient(90deg, #8cc63f 60%, #6dbb2f 100%);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .chat-send:hover {
+      background: linear-gradient(90deg, #6dbb2f 60%, #8cc63f 100%);
+      color: #1a3d2b;
+    }
+    #chat-response {
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+      margin-top: 24px;
+      font-size: 1.1rem;
+      white-space: pre-wrap;
+    }
+    @media (max-width: 600px) {
+      .logo {
+        margin-top: 18px;
+        max-width: 90vw;
+      }
+      .chat-heading {
+        font-size: 1.3rem;
+        margin: 18px 0 16px 0;
+      }
+      .chat-container {
+        padding: 12px 4vw 0 4vw;
+      }
+      .chat-form {
+        gap: 6px;
+      }
+      .chat-input, .chat-send {
+        font-size: 1rem;
+        padding: 12px 8px;
+      }
+      .chat-send {
+        padding: 0 14px;
+      }
+      #chat-response {
+        font-size: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <img src="{{ url_for('static', filename='images/rukvest-logo.png') }}" alt="RukVest Logo" class="logo" />
+  <div class="chat-heading">
+    Hi there 👋 <span class="highlight">Ask me anything about RUKSAK or RUKVEST</span>
+  </div>
+  <div class="chat-container">
+    <form class="chat-form">
+      <input class="chat-input" type="text" name="user_input" placeholder="Ask me anything..." required />
+      <button class="chat-send" type="submit">Send</button>
+    </form>
+    <div id="chat-response"></div>
+  </div>
+
+  <script>
+    document.querySelector('.chat-form').onsubmit = async function(e) {
+      e.preventDefault();
+      const input = document.querySelector('.chat-input');
+      const question = input.value.trim();
+      if (!question) return;
+  
+      const responseDiv = document.getElementById('chat-response');
+  
+      const chatBlock = document.createElement('div');
+      chatBlock.style.marginBottom = '36px';
+  
+      chatBlock.innerHTML = `
+        <div style="margin:24px 0 8px 0;font-weight:700;">You asked:</div>
+        <div style="background:#f6fff6;border-radius:10px;padding:16px 18px;margin-bottom:18px;font-size:1.1rem;">${question}</div>
+        <div style="margin:8px 0 8px 0;font-weight:700;">RukBot says:</div>
+        <div class="rukbot-stream" style="background:#eaffea;border-radius:10px;padding:16px 18px;margin-bottom:18px;font-size:1.1rem;"></div>
+      `;
+  
+      responseDiv.appendChild(chatBlock);
+  
+      const streamContainer = chatBlock.querySelector('.rukbot-stream');
+      input.value = '';
+  
+      const res = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: question })
+      });
+  
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+  
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        streamContainer.textContent += chunk;
+  
+        // 👇 This auto-scrolls to the latest reply
+        streamContainer.scrollIntoView({ behavior: 'smooth' });
+      }
+    };
+  </script>
+  
+</body>
+</html>
