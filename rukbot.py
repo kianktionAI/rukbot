@@ -1,29 +1,16 @@
 import os
 import fitz  # PyMuPDF
-from openai import OpenAI
+import random
 from dotenv import load_dotenv
+from openai import OpenAI
+from datetime import datetime
 from pydrive.auth import GoogleAuth
 from pydrive.drive import GoogleDrive
-import random
-
-# Load environment variables
-load_dotenv()
-from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 
-def log_to_google_sheet(question, response):
-    try:
-        creds = Credentials.from_service_account_file("service_account.json", scopes=["https://www.googleapis.com/auth/spreadsheets"])
-        sheet = gspread.authorize(creds).open("RukBot Logs")  # Make sure this matches your Google Sheet name
-        worksheet = sheet.worksheet("Sheet1")  # And this matches your tab
-        worksheet.append_row([
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            question,
-            response
-        ])
-    except Exception as e:
-        print("Logging to Google Sheet failed:", e)
+# Load environment variables
+load_dotenv()
 
 # Setup OpenAI client
 client = OpenAI(
@@ -52,6 +39,20 @@ GREETINGS_FOLLOWUP = [
     "Happy to help!"
 ]
 
+# Logging to Google Sheet
+def log_to_google_sheet(question, response):
+    try:
+        creds = Credentials.from_service_account_file("service_account.json", scopes=["https://www.googleapis.com/auth/spreadsheets"])
+        sheet = gspread.authorize(creds).open("RukBot Logs")
+        worksheet = sheet.worksheet("Sheet1")
+        worksheet.append_row([
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            question,
+            response
+        ])
+    except Exception as e:
+        print("Logging to Google Sheet failed:", e)
+
 # Load files from Google Drive
 def load_knowledge_from_drive():
     print("Loading knowledge base from Google Drive...")
@@ -69,7 +70,8 @@ def load_knowledge_from_drive():
             knowledge_cache[file['title']] = doc_text
             os.remove(file['title'])
 
-    print(f"Loaded {len(knowledge_cache)} files into memory.")
+    if not knowledge_cache:
+        print("⚠️ No documents were loaded from Google Drive.")
 
 # Extract PDF text
 def extract_text_from_pdf(filename):
@@ -86,18 +88,13 @@ def extract_text_from_pdf(filename):
 def format_prompt(user_message):
     global greeting_used
 
-    # Brand consistency
     user_message = user_message.replace("rukvest", "RUKVEST").replace("rukvests", "RUKVESTS")
     user_message = user_message.replace("ruksak", "RUKSAK").replace("ruksaks", "RUKSAKS")
 
     documents_text = "\n\n".join(knowledge_cache.values())
 
-    # Greeting logic
-    if not greeting_used:
-        opener = random.choice(GREETINGS_FIRST) + "\n\n"
-        greeting_used = True
-    else:
-        opener = ""
+    opener = random.choice(GREETINGS_FIRST) + "\n\n" if not greeting_used else ""
+    greeting_used = True
 
     prompt = f"""
 You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK brand.
@@ -124,8 +121,7 @@ Relevant Brand Knowledge:
 """
     return prompt
 
-
-# Reset session manually (optional)
+# Reset session
 def reset_session():
     global greeting_used, response_count
     greeting_used = False
@@ -137,37 +133,23 @@ def stream_response(message):
     if not knowledge_cache:
         load_knowledge_from_drive()
 
+    if not knowledge_cache:
+        yield "Hey there! Looks like I’m missing some context. Could you try again in a bit while I reload my brain? 🧠"
+        return
+
     prompt = format_prompt(message)
-    response_count += 1
     buffer = ""
 
-try:
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": message}
-        ],
-        stream=True
-    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": message}
+            ],
+            stream=True
+        )
 
-    for chunk in response:
-        if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
-            content = chunk.choices[0].delta.content
-            buffer += content
-            yield content
-
-except Exception as e:
-    print(f"Error while streaming response: {e}")
-
-
-
-# ✅ Log once the full response has streamed
-log_to_google_sheet(message, buffer)
-
-
-        if response_count % 5 == 0:
-            yield "\n\n❓ Not quite right? Drop us a line at [team@ruksak.com](mailto:team@ruksak.com) — we’re happy to help! 💌"
-
-    except Exception as e:
-        yield f"Oops! Something went wrong while chatting with RukBot: {str(e)}"
+        for chunk in response:
+            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
