@@ -1,6 +1,5 @@
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
-import pickle
 import os
 import json
 
@@ -12,9 +11,14 @@ def main():
         print("Token already exists.")
         return
 
-    flow = InstalledAppFlow.from_client_secrets_file(
-        'credentials.json', SCOPES
-    )
+    # Load client secrets from environment variable
+    client_config_str = os.getenv("GOOGLE_CLIENT_CONFIG")
+    if not client_config_str:
+        raise ValueError("Missing GOOGLE_CLIENT_CONFIG environment variable.")
+
+    client_config = json.loads(client_config_str)
+
+    flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
     creds = flow.run_local_server(port=8080, access_type='offline', prompt='consent')
 
     # Save the token
