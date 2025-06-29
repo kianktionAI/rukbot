@@ -70,8 +70,8 @@ def load_knowledge_from_drive():
             knowledge_cache[file['title']] = doc_text
             os.remove(file['title'])
 
-    if not knowledge_cache:
-        print("⚠️ No documents were loaded from Google Drive.")
+    print(f"Loaded {len(knowledge_cache)} files into memory.")
+
 
 # Extract PDF text
 def extract_text_from_pdf(filename):
