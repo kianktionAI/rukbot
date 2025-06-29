@@ -5,3 +5,4 @@ client_secrets.json
 config.json
 rukbot_config.json
 __pycache__/
+secrets_backup/rukbot_config.py
