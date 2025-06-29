@@ -141,21 +141,26 @@ def stream_response(message):
     response_count += 1
     buffer = ""
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": message}
-            ],
-            stream=True
-        )
+try:
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": message}
+        ],
+        stream=True
+    )
 
-for chunk in response:
-    if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
-        content = chunk.choices[0].delta.content
-        buffer += content
-        yield content
+    for chunk in response:
+        if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+            content = chunk.choices[0].delta.content
+            buffer += content
+            yield content
+
+except Exception as e:
+    print(f"Error while streaming response: {e}")
+
+
 
 # ✅ Log once the full response has streamed
 log_to_google_sheet(message, buffer)
