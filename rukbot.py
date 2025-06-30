@@ -114,7 +114,6 @@ def reset_session():
     response_count = 0
 
 # Response streamer
-from rukbot_globals import knowledge_cache  # or however you're accessing it
 
 def stream_response(user_input):
     found = False
