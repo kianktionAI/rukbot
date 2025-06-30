@@ -1,3 +1,11 @@
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+import io
+from pdfminer.high_level import extract_text
+import tempfile
+
+
 def load_google_folder_files(folder_id):
     creds = service_account.Credentials.from_service_account_file(
         SERVICE_ACCOUNT_FILE, scopes=SCOPES
