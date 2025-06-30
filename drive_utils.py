@@ -5,6 +5,8 @@ import io
 from pdfminer.high_level import extract_text
 import tempfile
 
+SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+SERVICE_ACCOUNT_FILE = '/etc/secrets/service_account.json'  # Make sure this path is correct on Render
 
 def load_google_folder_files(folder_id):
     creds = service_account.Credentials.from_service_account_file(
