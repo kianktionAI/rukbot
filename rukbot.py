@@ -56,10 +56,18 @@ def log_to_google_sheet(question, response):
         print("Logging to Google Sheet failed:", e)
 
 # Load files from Google Drive
+from pydrive2.auth import GoogleAuth
+from pydrive2.auth import ServiceAccountCredentials
+from pydrive2.drive import GoogleDrive
+
 def load_knowledge_from_drive():
     print("Loading knowledge base from Google Drive...")
+
     gauth = GoogleAuth()
-    gauth.LocalWebserverAuth()
+    gauth.credentials = ServiceAccountCredentials.from_json_keyfile_name(
+        "service_account.json",
+        scopes=["https://www.googleapis.com/auth/drive"]
+    )
     drive = GoogleDrive(gauth)
 
     folder_id = "12ZRNwCmVa3d2X5-rBQrbzq7f9aIDesiV"
@@ -73,6 +81,7 @@ def load_knowledge_from_drive():
             os.remove(file['title'])
 
     print(f"Loaded {len(knowledge_cache)} files into memory.")
+
 
 # Extract PDF text
 def extract_text_from_pdf(filename):
