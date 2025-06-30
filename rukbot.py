@@ -173,24 +173,21 @@ def stream_response(message):
 
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
-import asyncio
 
 app = FastAPI()
 
 @app.get("/")
 def read_root():
-    return {"message": "RukBot is alive and flexing!"}
+    return {"message": "RukBot is alive!"}
 
 @app.post("/chat")
 async def chat_endpoint(request: Request):
     data = await request.json()
     user_input = data.get("message", "")
 
-    if not user_input:
-        return {"error": "No message provided"}
-
     def generate():
         for chunk in stream_response(user_input):
             yield chunk
 
     return StreamingResponse(generate(), media_type="text/plain")
+
