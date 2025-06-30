@@ -126,13 +126,14 @@ def stream_response(user_input):
         stream=True
     )
 
-    for chunk in response:
+for chunk in response:
     try:
         content = chunk.choices[0].delta.content
         if content:
             yield content
     except AttributeError:
         pass
+
 
 
 
