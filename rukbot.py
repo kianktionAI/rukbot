@@ -116,12 +116,6 @@ def reset_session():
 # Response streamer
 def stream_response(message):
     global response_count
-    if not knowledge_cache:
-        load_knowledge_from_drive()
-
-    if not knowledge_cache:
-        yield "Hey there! Looks like I’m missing some context. Could you try again in a bit while I reload my brain? 🧐"
-        return
 
     prompt = format_prompt(message)
     buffer = ""
@@ -130,7 +124,7 @@ def stream_response(message):
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "user", "content": prompt}  # 👈 JUST one user message with full prompt
+                {"role": "user", "content": prompt}
             ],
             stream=True
         )
@@ -146,6 +140,7 @@ def stream_response(message):
     except Exception as e:
         yield f"Oops, something went wrong: {str(e)}"
         reset_session()
+
 
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
