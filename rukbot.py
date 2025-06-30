@@ -145,8 +145,7 @@ def stream_response(message):
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": message}
+                {"role": "user", "content": prompt}  # 👈 JUST one user message with full prompt
             ],
             stream=True
         )
