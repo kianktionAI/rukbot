@@ -114,24 +114,21 @@ def reset_session():
     response_count = 0
 
 # Response streamer
-
 def stream_response(user_input):
-    found = False
-    lower_input = user_input.lower()
+    prompt = format_prompt(user_input)
 
-    for filename, content in knowledge_cache.items():
-        if lower_input in content.lower():
-            lines = content.split('\n')
-            for line in lines:
-                if lower_input in line.lower():
-                    yield line.strip()
-                    found = True
-                    break
-            if found:
-                break
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You are RukBot, the casually brilliant gym buddy AI."},
+            {"role": "user", "content": prompt}
+        ],
+        stream=True
+    )
 
-    if not found:
-        yield "Hey there! Looks like I’m missing some context. Could you try again in a bit while I reload my brain? 🧐"
+    for chunk in response:
+        if chunk.choices[0].delta.get("content"):
+            yield chunk.choices[0].delta["content"]
 
 
 
