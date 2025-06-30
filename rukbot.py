@@ -21,7 +21,10 @@ client = OpenAI(
 )
 
 # Globals
-knowledge_cache = {}
+from drive_utils import load_google_folder_files  # make sure this import works
+
+knowledge_cache = load_google_folder_files("12ZRNwCmVa3d2X5-rBQrbzq7f9aIDesiV")
+
 greeting_used = False
 response_count = 0
 
@@ -54,33 +57,6 @@ def log_to_google_sheet(question, response):
         ])
     except Exception as e:
         print("Logging to Google Sheet failed:", e)
-
-# Load files from Google Drive
-from pydrive2.auth import GoogleAuth
-from pydrive2.auth import ServiceAccountCredentials
-from pydrive2.drive import GoogleDrive
-
-def load_knowledge_from_drive():
-    print("Loading knowledge base from Google Drive...")
-
-    gauth = GoogleAuth()
-    gauth.credentials = ServiceAccountCredentials.from_json_keyfile_name(
-        "service_account.json",
-        scopes=["https://www.googleapis.com/auth/drive"]
-    )
-    drive = GoogleDrive(gauth)
-
-    folder_id = "12ZRNwCmVa3d2X5-rBQrbzq7f9aIDesiV"
-    file_list = drive.ListFile({'q': f"'{folder_id}' in parents and trashed=false"}).GetList()
-
-    for file in file_list:
-        if file['title'].endswith(".pdf"):
-            file.GetContentFile(file['title'])
-            doc_text = extract_text_from_pdf(file['title'])
-            knowledge_cache[file['title']] = doc_text
-            os.remove(file['title'])
-
-    print(f"Loaded {len(knowledge_cache)} files into memory.")
 
 
 # Extract PDF text
