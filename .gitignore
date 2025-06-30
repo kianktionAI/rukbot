@@ -9,3 +9,4 @@ rukbot_config.py
 echo -e "token.json\n.env\nconfig.json\nrukbot_config.py\ncredentials.json\n__pycache__/\n*.pyc" > .gitignore
 # Ignore Python bytecode and cache files
 service_account.json
+service_account_rukbot.json
