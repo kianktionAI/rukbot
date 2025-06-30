@@ -10,3 +10,9 @@ google-auth-httplib2==0.2.0
 gunicorn==23.0.0
 fastapi==0.110.0
 uvicorn==0.34.2
+pdfminer.six
+flask
+openai
+google-api-python-client
+google-auth
+google-auth-oauthlib
