@@ -1,3 +1,5 @@
+# app.py
+
 from flask import Flask, render_template, request, Response, stream_with_context
 from rukbot import stream_response
 import os
@@ -6,7 +8,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return render_template("chat.html")
+    return render_template("chat.html")  # Ensure this file exists!
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -30,5 +32,10 @@ def chat():
         return Response(f"Error: {str(e)}", status=500)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(debug=False, host="0.0.0.0", port=port)
+    import sys
+
+    # Allow setting port from command line like: python3 app.py 5001
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
+
+    app.run(debug=True, host="0.0.0.0", port=port)
+

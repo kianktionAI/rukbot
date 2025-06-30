@@ -1,3 +1,5 @@
+# rukbot.py
+
 import os
 import fitz  # PyMuPDF
 import random
@@ -72,7 +74,6 @@ def load_knowledge_from_drive():
 
     print(f"Loaded {len(knowledge_cache)} files into memory.")
 
-
 # Extract PDF text
 def extract_text_from_pdf(filename):
     text = ""
@@ -114,10 +115,10 @@ Start the message with:
 {opener}
 
 Customer asked:
-\"{user_message}\"
+"{user_message}"
 
 Relevant Brand Knowledge:
-\"{documents_text[:12000]}\"
+"{documents_text[:12000]}"
 """
     return prompt
 
@@ -134,30 +135,30 @@ def stream_response(message):
         load_knowledge_from_drive()
 
     if not knowledge_cache:
-        yield "Hey there! Looks like I’m missing some context. Could you try again in a bit while I reload my brain? 🧠"
+        yield "Hey there! Looks like I’m missing some context. Could you try again in a bit while I reload my brain? 🧐"
         return
 
     prompt = format_prompt(message)
     buffer = ""
 
     try:
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": message}
-        ],
-        stream=True
-    )
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": message}
+            ],
+            stream=True
+        )
 
-    for chunk in response:
-        if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
-            content = chunk.choices[0].delta.content
-            buffer += content
-            yield content
+        for chunk in response:
+            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                buffer += content
+                yield content
 
-    log_to_google_sheet(message, buffer)
-    response_count += 1
+        log_to_google_sheet(message, buffer)
 
-except Exception as e:
-    yield f"\nOops, something went wrong: {str(e)}"
+    except Exception as e:
+        yield f"Oops, something went wrong: {str(e)}"
+        reset_session()
