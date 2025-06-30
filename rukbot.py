@@ -127,8 +127,14 @@ def stream_response(user_input):
     )
 
     for chunk in response:
-        if chunk.choices[0].delta.get("content"):
-            yield chunk.choices[0].delta["content"]
+    try:
+        content = chunk.choices[0].delta.content
+        if content:
+            yield content
+    except AttributeError:
+        pass
+
+
 
 
 
