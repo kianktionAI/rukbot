@@ -1,14 +1,7 @@
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
-import io
-from pdfminer.high_level import extract_text
-import tempfile
-
-SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
-
 def load_google_folder_files(folder_id):
-    creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    creds = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+    )
     service = build('drive', 'v3', credentials=creds)
 
     query = f"'{folder_id}' in parents and trashed = false"
@@ -40,4 +33,5 @@ def load_google_folder_files(folder_id):
         else:
             file_contents[file_name] = fh.read().decode('utf-8')
 
+    print(f"✅ Loaded {len(file_contents)} files from Google Drive.")
     return file_contents
