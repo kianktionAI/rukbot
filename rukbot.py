@@ -114,32 +114,26 @@ def reset_session():
     response_count = 0
 
 # Response streamer
-def stream_response(message):
-    global response_count
+from rukbot_globals import knowledge_cache  # or however you're accessing it
 
-    prompt = format_prompt(message)
-    buffer = ""
+def stream_response(user_input):
+    found = False
+    lower_input = user_input.lower()
 
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            stream=True
-        )
+    for filename, content in knowledge_cache.items():
+        if lower_input in content.lower():
+            lines = content.split('\n')
+            for line in lines:
+                if lower_input in line.lower():
+                    yield line.strip()
+                    found = True
+                    break
+            if found:
+                break
 
-        for chunk in response:
-            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
-                content = chunk.choices[0].delta.content
-                buffer += content
-                yield content
+    if not found:
+        yield "Hey there! Looks like I’m missing some context. Could you try again in a bit while I reload my brain? 🧐"
 
-        log_to_google_sheet(message, buffer)
-
-    except Exception as e:
-        yield f"Oops, something went wrong: {str(e)}"
-        reset_session()
 
 
 from fastapi import FastAPI, Request
