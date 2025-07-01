@@ -162,3 +162,13 @@ async def chat_endpoint(request: Request):
             yield chunk
 
     return StreamingResponse(generate(), media_type="text/plain")
+
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi import Request
+
+templates = Jinja2Templates(directory="templates")
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_chat(request: Request):
+    return templates.TemplateResponse("chat.html", {"request": request})
