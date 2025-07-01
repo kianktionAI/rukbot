@@ -169,6 +169,3 @@ from fastapi import Request
 
 templates = Jinja2Templates(directory="templates")
 
-@app.get("/", response_class=HTMLResponse)
-async def serve_chat(request: Request):
-    return templates.TemplateResponse("chat.html", {"request": request})
