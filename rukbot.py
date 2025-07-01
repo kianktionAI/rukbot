@@ -13,12 +13,17 @@ from google.oauth2.service_account import Credentials
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+
 
 # Load environment variables
 load_dotenv()
 
 # FastAPI app
 app = FastAPI()
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 templates = Jinja2Templates(directory="templates")
 
 # Setup OpenAI client
