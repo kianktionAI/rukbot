@@ -10,9 +10,16 @@ from pydrive2.auth import GoogleAuth
 from pydrive2.drive import GoogleDrive
 import gspread
 from google.oauth2.service_account import Credentials
+from fastapi import FastAPI, Request
+from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
 
 # Load environment variables
 load_dotenv()
+
+# FastAPI app
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
 
 # Setup OpenAI client
 client = OpenAI(
@@ -21,8 +28,7 @@ client = OpenAI(
 )
 
 # Globals
-from drive_utils import load_google_folder_files  # make sure this import works
-
+from drive_utils import load_google_folder_files  # Ensure this import works
 knowledge_cache = load_google_folder_files("12ZRNwCmVa3d2X5-rBQrbzq7f9aIDesiV")
 
 greeting_used = False
@@ -57,7 +63,6 @@ def log_to_google_sheet(question, response):
         ])
     except Exception as e:
         print("Logging to Google Sheet failed:", e)
-
 
 # Extract PDF text
 def extract_text_from_pdf(filename):
@@ -134,20 +139,13 @@ def stream_response(user_input):
         except AttributeError:
             continue
 
+# ---------------------
+# ROUTES
+# ---------------------
 
-
-
-
-
-
-from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse
-
-app = FastAPI()
-
-@app.get("/")
-def read_root():
-    return {"message": "RukBot is alive!"}
+@app.get("/", response_class=HTMLResponse)
+async def get_chat(request: Request):
+    return templates.TemplateResponse("chat.html", {"request": request})
 
 @app.post("/chat")
 async def chat_endpoint(request: Request):
@@ -159,4 +157,3 @@ async def chat_endpoint(request: Request):
             yield chunk
 
     return StreamingResponse(generate(), media_type="text/plain")
-
