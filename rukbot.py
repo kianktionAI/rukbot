@@ -58,7 +58,10 @@ GREETINGS_FOLLOWUP = [
 # Logging to Google Sheet
 def log_to_google_sheet(question, response):
     try:
-        creds = Credentials.from_service_account_file("service_account.json", scopes=["https://www.googleapis.com/auth/spreadsheets"])
+        creds = Credentials.from_service_account_file(
+            "/etc/secrets/service_account.json", 
+            scopes=["https://www.googleapis.com/auth/spreadsheets"]
+        )
         sheet = gspread.authorize(creds).open("RukBot Logs")
         worksheet = sheet.worksheet("Sheet1")
         worksheet.append_row([
@@ -67,7 +70,9 @@ def log_to_google_sheet(question, response):
             response
         ])
     except Exception as e:
-        print("Logging to Google Sheet failed:", e)
+        print("⚠️ Logging to Google Sheet failed:", e)
+# log_to_google_sheet(user_input, final_response)
+
 
 # Extract PDF text
 def extract_text_from_pdf(filename):
@@ -156,16 +161,21 @@ async def get_chat(request: Request):
 async def chat_endpoint(request: Request):
     data = await request.json()
     user_input = data.get("message", "")
+    full_response = ""  # Start with an empty response
 
     def generate():
+        nonlocal full_response
         for chunk in stream_response(user_input):
+            full_response += chunk
             yield chunk
 
-    return StreamingResponse(generate(), media_type="text/plain")
+    # Wrap the generator in a StreamingResponse
+    response = StreamingResponse(generate(), media_type="text/plain")
 
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
-from fastapi import Request
+    # Trigger the logging after the stream is complete using background task
+    from starlette.background import BackgroundTask
+    response.background = BackgroundTask(log_to_google_sheet, user_input, full_response)
 
-templates = Jinja2Templates(directory="templates")
+    return response
+
 
