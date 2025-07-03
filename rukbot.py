@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-
+from starlette.background import BackgroundTask
 
 # Load environment variables
 load_dotenv()
@@ -23,7 +23,6 @@ load_dotenv()
 app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 templates = Jinja2Templates(directory="templates")
 
 # Setup OpenAI client
@@ -32,10 +31,11 @@ client = OpenAI(
     project=os.getenv("OPENAI_PROJECT_ID")
 )
 
-# Globals
-from drive_utils import load_google_folder_files  # Ensure this import works
+# Load Google Drive docs
+from drive_utils import load_google_folder_files
 knowledge_cache = load_google_folder_files("12ZRNwCmVa3d2X5-rBQrbzq7f9aIDesiV")
 
+# Globals
 response_count = 0
 
 GREETINGS_FIRST = [
@@ -58,7 +58,7 @@ GREETINGS_FOLLOWUP = [
 def log_to_google_sheet(question, response):
     try:
         creds = Credentials.from_service_account_file(
-            "/etc/secrets/service_account.json", 
+            "/etc/secrets/service_account.json",
             scopes=["https://www.googleapis.com/auth/spreadsheets"]
         )
         sheet = gspread.authorize(creds).open("RukBot Logs")
@@ -70,8 +70,6 @@ def log_to_google_sheet(question, response):
         ])
     except Exception as e:
         print("⚠️ Logging to Google Sheet failed:", e)
-# log_to_google_sheet(user_input, final_response)
-
 
 # Extract PDF text
 def extract_text_from_pdf(filename):
@@ -84,62 +82,54 @@ def extract_text_from_pdf(filename):
         print(f"Error reading {filename}: {e}")
     return text
 
-# Format prompt for OpenAI
+# Prompt builder
+def build_prompt(user_message, opener, documents_text):
+    return f"""
+You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK brand.
+
+🗣️ Tone & Style:
+- Friendly, like a helpful gym buddy
+- Keep replies short, sharp, and easy to skim (mobile-friendly)
+- Add emojis when helpful (but not overdone)
+- Use brand phrases like “Move with meaning”, “Start light and build”, and “We’ve got your back (literally)”
+- Speak human: avoid fluff, repetition, or robotic-sounding replies
+
+❌ Avoid:
+- Salesy hype like “transform your body”, “biohack”, “game changer”
+- Mentioning documents, sources, or file references
+- Overloading with info — only answer what’s asked
+
+🎯 Your mission:
+- Help the customer make fast, confident decisions
+- Be clear, helpful, and aligned with brand tone
+- Never make things up — if unsure, say “Great question! Let me check on that for you.”
+
+👋 Start your message with:
+{opener}
+
+🧠 Customer asked:
+"{user_message}"
+
+📚 Relevant Brand Knowledge:
+"{documents_text[:12000]}"
+"""
+
+# Format prompt
 def format_prompt(user_message):
     global response_count
 
-    # Capitalisation fixes
     user_message = user_message.replace("rukvest", "RUKVEST").replace("rukvests", "RUKVESTS")
     user_message = user_message.replace("ruksak", "RUKSAK").replace("ruksaks", "RUKSAKS")
 
-    # Merge all brand knowledge
     documents_text = "\n\n".join(knowledge_cache.values())
-
-    # Use greeting ONLY on the first response
     opener = random.choice(GREETINGS_FIRST) + "\n\n" if response_count == 0 else ""
-
-    # Increment response count
     response_count += 1
 
-def build_prompt(user_message, opener, documents_text):
-    prompt = f"""
-    You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK brand.
-
-    🗣️ Tone & Style:
-    - Friendly, like a helpful gym buddy
-    - Keep replies short, sharp, and easy to skim (mobile-friendly)
-    - Add emojis when helpful (but not overdone)
-    - Use brand phrases like “Move with meaning”, “Start light and build”, and “We’ve got your back (literally)”
-    - Speak human: avoid fluff, repetition, or robotic-sounding replies
-
-    ❌ Avoid:
-    - Salesy hype like “transform your body”, “biohack”, “game changer”
-    - Mentioning documents, sources, or file references
-    - Overloading with info — only answer what’s asked
-
-    🎯 Your mission:
-    - Help the customer make fast, confident decisions
-    - Be clear, helpful, and aligned with brand tone
-    - Never make things up — if unsure, say “Great question! Let me check on that for you.”
-
-    👋 Start your message with:
-    {opener}
-
-    🧠 Customer asked:
-    "{user_message}"
-
-    📚 Relevant Brand Knowledge:
-    "{documents_text[:12000]}"
-    """
-    return prompt
-
-
-
+    return build_prompt(user_message, opener, documents_text)
 
 # Reset session
 def reset_session():
-    global greeting_used, response_count
-    greeting_used = False
+    global response_count
     response_count = 0
 
 # Response streamer
@@ -163,9 +153,7 @@ def stream_response(user_input):
         except AttributeError:
             continue
 
-# ---------------------
-# ROUTES
-# ---------------------
+# Routes
 
 @app.get("/", response_class=HTMLResponse)
 async def get_chat(request: Request):
@@ -175,7 +163,7 @@ async def get_chat(request: Request):
 async def chat_endpoint(request: Request):
     data = await request.json()
     user_input = data.get("message", "")
-    full_response = ""  # Start with an empty response
+    full_response = ""
 
     def generate():
         nonlocal full_response
@@ -183,13 +171,7 @@ async def chat_endpoint(request: Request):
             full_response += chunk
             yield chunk
 
-    # Wrap the generator in a StreamingResponse
     response = StreamingResponse(generate(), media_type="text/plain")
-
-    # Trigger the logging after the stream is complete using background task
-    from starlette.background import BackgroundTask
     response.background = BackgroundTask(log_to_google_sheet, user_input, full_response)
 
     return response
-
-
