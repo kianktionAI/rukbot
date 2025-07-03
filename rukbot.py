@@ -87,15 +87,20 @@ def extract_text_from_pdf(filename):
 
 # Format prompt for OpenAI
 def format_prompt(user_message):
-    global greeting_used
+    global response_count
 
+    # Capitalisation fixes
     user_message = user_message.replace("rukvest", "RUKVEST").replace("rukvests", "RUKVESTS")
     user_message = user_message.replace("ruksak", "RUKSAK").replace("ruksaks", "RUKSAKS")
 
+    # Merge all brand knowledge
     documents_text = "\n\n".join(knowledge_cache.values())
 
-    opener = random.choice(GREETINGS_FIRST) + "\n\n" if not greeting_used else ""
-    greeting_used = True
+    # Use greeting ONLY on the first response
+    opener = random.choice(GREETINGS_FIRST) + "\n\n" if response_count == 0 else ""
+
+    # Increment response count
+    response_count += 1
 
     prompt = f"""
 You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK brand.
@@ -121,6 +126,7 @@ Relevant Brand Knowledge:
 "{documents_text[:12000]}"
 """
     return prompt
+
 
 # Reset session
 def reset_session():
