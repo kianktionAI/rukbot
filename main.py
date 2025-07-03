@@ -1,0 +1,1 @@
+from rukbot import app
