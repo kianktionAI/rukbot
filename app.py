@@ -31,11 +31,13 @@ def chat():
         print("Error in /chat route:", e)
         return Response(f"Error: {str(e)}", status=500)
 
+# ✅ Add this just BEFORE the __main__ block
+@app.route("/widget")
+def rukbot_widget():
+    return render_template("rukbot-widget.html")
+
+# ✅ Main server launcher
 if __name__ == "__main__":
     import sys
-
-    # Allow setting port from command line like: python3 app.py 5001
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 5000
-
     app.run(debug=True, host="0.0.0.0", port=port)
-

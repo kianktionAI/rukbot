@@ -1,0 +1,90 @@
+.rukbot-container {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  width: 340px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
+  z-index: 9999;
+}
+
+.rukbot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #FFD83D;
+  padding: 10px;
+}
+
+.rukbot-logo {
+  height: 30px;
+}
+
+.rukbot-avatars img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  margin-left: 5px;
+}
+
+.rukbot-close {
+  font-size: 20px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.rukbot-body {
+  padding: 12px;
+  font-size: 14px;
+}
+
+.rukbot-welcome {
+  font-weight: bold;
+  font-size: 15px;
+}
+
+.rukbot-chat {
+  margin-top: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.rukbot-user,
+.rukbot-response {
+  margin: 8px 0;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.rukbot-user {
+  background: #FFF49A;
+}
+
+.rukbot-response {
+  background: #F1F1F1;
+}
+
+#rukbot-form {
+  display: flex;
+  margin-top: 10px;
+}
+
+#rukbot-input {
+  flex: 1;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+#rukbot-form button {
+  background: #FFD83D;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-left: 5px;
+  font-weight: bold;
+}
