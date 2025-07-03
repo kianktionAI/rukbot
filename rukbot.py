@@ -194,3 +194,7 @@ async def chat_endpoint(request: Request):
     response.background = BackgroundTask(log_to_google_sheet, user_input, full_response)
 
     return response
+
+@app.get("/widget", response_class=HTMLResponse)
+async def get_widget(request: Request):
+    return templates.TemplateResponse("rukbot-widget.html", {"request": request})
