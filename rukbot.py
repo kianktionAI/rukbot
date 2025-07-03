@@ -136,26 +136,41 @@ def reset_session():
     global response_count
     response_count = 0
 
+def handle_unknown_question():
+    return {
+        "role": "assistant",
+        "content": """🧠 Great question! Let me check on that for you. 
+In the meantime, you can also reach our team directly at 📩 team@ruksak.com - they’ve got your back!"""
+    }
+
+
 # Response streamer
 def stream_response(user_input):
     prompt = format_prompt(user_input)
 
-    response = client.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are RukBot, the casually brilliant gym buddy AI."},
-            {"role": "user", "content": prompt}
-        ],
-        stream=True
-    )
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are RukBot, the casually brilliant gym buddy AI."},
+                {"role": "user", "content": prompt}
+            ],
+            stream=True
+        )
 
-    for chunk in response:
-        try:
-            content = chunk.choices[0].delta.content
-            if content:
-                yield content
-        except AttributeError:
-            continue
+        for chunk in response:
+            try:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
+            except AttributeError:
+                continue
+
+    except Exception as e:
+        print("⚠️ OpenAI streaming failed:", e)
+        fallback = handle_unknown_question()
+        yield fallback["content"]
+
 
 # Routes
 
