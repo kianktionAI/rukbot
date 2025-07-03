@@ -174,6 +174,10 @@ def stream_response(user_input):
 
 # Routes
 
+@app.get("/check")
+async def check():
+    return {"status": "ok"}
+
 @app.get("/", response_class=HTMLResponse)
 async def get_chat(request: Request):
     return templates.TemplateResponse("chat.html", {"request": request})
