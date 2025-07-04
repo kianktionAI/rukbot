@@ -88,7 +88,7 @@ body {
 }
 
 button {
-  width: 100%; /* Full width for a consistent look */
+  width: 160px;
   padding: 12px;
   background-color: #facc15;
   color: #000;
@@ -96,6 +96,7 @@ button {
   border: none;
   border-radius: 8px;
   cursor: pointer;
+  align-self: center; /* 👈 Centre the button horizontally */
 }
 
   button:hover {
