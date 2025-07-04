@@ -72,30 +72,32 @@ body {
   }
   
   .input-group {
-    display: flex;
-    width: 100%;
-    margin-top: 10px;
-  }
+  display: flex;
+  flex-direction: column; /* 🔁 Stack vertically */
+  gap: 8px; /* Add some spacing between input and button */
+  width: 100%;
+}
   
   #user-input {
-    flex: 1;
-    padding: 12px;
-    font-size: 16px;
-    border: none;
-    border-radius: 8px 0 0 8px;
-    outline: none;
-  }
-  
-  button {
-    padding: 12px 20px;
-    background-color: #facc15;
-    color: #000;
-    font-weight: bold;
-    border: none;
-    border-radius: 0 8px 8px 0;
-    cursor: pointer;
-  }
-  
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  outline: none;
+}
+
+button {
+  width: 100%; /* Full width for a consistent look */
+  padding: 12px;
+  background-color: #facc15;
+  color: #000;
+  font-weight: bold;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
   button:hover {
     background-color: #eab308;
   }
