@@ -48,7 +48,8 @@
       display: flex;
       flex-direction: column; /* Stack vertically */
       gap: 8px; /* spacing between input and button */
-      margin-top: 12px;}
+      margin-top: 12px;
+    }
 
     .chat-input {
       flex: 1;
@@ -138,13 +139,25 @@
       const chatBlock = document.createElement('div');
       chatBlock.style.marginBottom = '36px';
   
-      chatBlock.innerHTML = `
-        <div style="margin:24px 0 8px 0;font-weight:700;">You asked:</div>
-        <div style="background:#f6fff6;border-radius:10px;padding:16px 18px;margin-bottom:18px;font-size:1.1rem;">${question}</div>
-        <div style="margin:8px 0 8px 0;font-weight:700;">RukBot says:</div>
-        <div class="rukbot-stream" style="background:#eaffea;border-radius:10px;padding:16px 18px;margin-bottom:18px;font-size:1.1rem;"></div>
-      `;
-  
+chatBlock.innerHTML = `
+  <div style="margin:16px 0 4px 0; font-weight:700;">
+    You asked:
+  </div>
+  <div style="background:#f6fff6; border-radius:10px; padding:12px 16px; margin-bottom:12px; font-size:1.05rem;">
+    ${question}
+  </div>
+  <div style="margin:4px 0 6px 0; font-weight:700; display:flex; align-items:center; gap:8px;">
+    <img src="/static/images/rukbot-icon.png" 
+         alt="RUKBOT" 
+         style="width:32px; height:32px; border-radius:50%;" />
+    RukBot says:
+  </div>
+  <div class="rukbot-stream" 
+       style="background:#eaffea; border-radius:10px; padding:12px 16px; margin-bottom:16px; font-size:1.05rem;">
+  </div>
+`;
+
+
       responseDiv.appendChild(chatBlock);
   
       const streamContainer = chatBlock.querySelector('.rukbot-stream');
