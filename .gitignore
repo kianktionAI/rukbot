@@ -10,3 +10,4 @@ echo -e "token.json\n.env\nconfig.json\nrukbot_config.py\ncredentials.json\n__py
 # Ignore Python bytecode and cache files
 service_account.json
 service_account_rukbot.json
+.DS_Store
