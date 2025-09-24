@@ -85,6 +85,8 @@
       margin-top: 24px;
       font-size: 1.1rem;
       white-space: pre-wrap;
+      overflow-y: auto;
+      max-height: 60vh; /* prevent it from growing off screen */
     }
     @media (max-width: 600px) {
       .logo {
@@ -115,7 +117,9 @@
   </style>
 </head>
 <body>
-<img src="/static/images/rukvest-logo.png" alt="RukVest Logo" class="logo" />
+  <img src="/static/images/rukvest-logo.png" 
+     alt="RukVest Logo" 
+     class="logo" />
   <div class="chat-heading">
     Hi there 👋 <span class="highlight">Ask me anything</span>
   </div>
@@ -133,56 +137,75 @@
       const input = document.querySelector('.chat-input');
       const question = input.value.trim();
       if (!question) return;
-  
+
       const responseDiv = document.getElementById('chat-response');
-  
-      const chatBlock = document.createElement('div');
-      chatBlock.style.marginBottom = '36px';
-  
-chatBlock.innerHTML = `
-  <div style="margin:16px 0 4px 0; font-weight:700;">
-    You asked:
-  </div>
-  <div style="background:#f6fff6; border-radius:10px; padding:12px 16px; margin-bottom:12px; font-size:1.05rem;">
-    ${question}
-  </div>
-  <div style="margin:0 0 8px 0; font-weight:700; display:flex; align-items:center; gap:8px;">
-    <img src="/static/images/rukbot-icon.png"
-         alt="RUKBOT"
-         style="width:32px; height:32px; border-radius:50%;" />
-    RukBot says:
-  </div>
-  <div class="rukbot-stream"
-       style="background:#eaffea; border-radius:10px; padding:12px 16px; margin-bottom:16px; font-size:1.05rem;">
-  </div>
-`;
 
+      // --- User bubble ---
+      const userBubble = document.createElement('div');
+      userBubble.style.textAlign = 'right';
+      userBubble.innerHTML = `
+        <div style="
+          display:inline-block;
+          background:#d4f8e8;
+          border-radius:12px;
+          padding:10px 14px;
+          margin:8px 0;
+          font-size:1.05rem;
+          max-width:80%;
+        ">
+          ${question}
+        </div>
+      `;
+      responseDiv.appendChild(userBubble);
 
-      responseDiv.appendChild(chatBlock);
-  
-      const streamContainer = chatBlock.querySelector('.rukbot-stream');
+      // Clear input
       input.value = '';
-  
+
+      // --- RukBot bubble ---
+      const botBubble = document.createElement('div');
+      botBubble.style.textAlign = 'left';
+      botBubble.innerHTML = `
+        <div style="display:flex; align-items:flex-start; gap:8px; margin:8px 0;">
+          <img src="/static/images/RUKSAK-icon.png"
+               alt="RUKSAK"
+               style="width:28px; height:28px; border-radius:50%;" />
+          <div class="rukbot-stream" style="
+            display:inline-block;
+            background:#eaffea;
+            border-radius:12px;
+            padding:10px 14px;
+            font-size:1.05rem;
+            max-width:80%;
+          "></div>
+        </div>
+      `;
+      responseDiv.appendChild(botBubble);
+
+      const streamContainer = botBubble.querySelector('.rukbot-stream');
+
+      // --- Fetch response ---
       const res = await fetch('/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: question })
       });
-  
+
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-  
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
         streamContainer.textContent += chunk;
-  
-        // 👇 This auto-scrolls to the latest reply
-        streamContainer.scrollIntoView({ behavior: 'smooth' });
+
+        // Auto-scroll as messages appear
+        responseDiv.scrollTo({
+          top: responseDiv.scrollHeight,
+          behavior: 'smooth'
+        });
       }
     };
   </script>
-  
 </body>
 </html>
