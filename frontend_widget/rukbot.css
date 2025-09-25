@@ -1,0 +1,99 @@
+/* Container */
+#rukbot-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  font-family: Arial, sans-serif;
+  z-index: 9999;
+}
+
+/* Floating Button */
+#rukbot-button {
+  background: #FFD500;
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+}
+#rukbot-button img { width: 40px; height: 40px; }
+
+/* Chat Window */
+#rukbot-chat {
+  width: 320px;
+  height: 420px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 6px 10px rgba(0,0,0,0.25);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+#rukbot-header {
+  background: #FFD500;
+  color: #000;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  padding: 10px;
+}
+#rukbot-header img {
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
+}
+#rukbot-header span {
+  flex: 1;
+}
+#rukbot-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #000;
+}
+
+/* Messages */
+#rukbot-messages {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
+  background: #f9f9f9;
+}
+.rukbot-msg {
+  background: #eee;
+  padding: 8px 12px;
+  margin: 6px 0;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.rukbot-user {
+  background: #FFD500;
+  text-align: right;
+}
+
+/* Input */
+#rukbot-input-area {
+  display: flex;
+  border-top: 1px solid #ddd;
+}
+#rukbot-input {
+  flex: 1;
+  border: none;
+  padding: 12px;
+  font-size: 14px;
+  outline: none;
+}
+#rukbot-send {
+  background: #FFD500;
+  border: none;
+  padding: 0 15px;
+  cursor: pointer;
+  font-size: 16px;
+}
