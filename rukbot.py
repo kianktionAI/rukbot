@@ -8,10 +8,9 @@ from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from starlette.background import BackgroundTask
 
 # Load environment variables
 load_dotenv()
@@ -34,7 +33,10 @@ knowledge_cache = load_google_folder_files("12ZRNwCmVa3d2X5-rBQrbzq7f9aIDesiV")
 # Globals
 response_count = 0  # tracks first vs follow-up
 
+
+# --------------------------------------------------
 # Logging to Google Sheet
+# --------------------------------------------------
 def log_to_google_sheet(question, response):
     try:
         creds = Credentials.from_service_account_file(
@@ -51,7 +53,10 @@ def log_to_google_sheet(question, response):
     except Exception as e:
         print("⚠️ Logging to Google Sheet failed:", e)
 
-# Extract PDF text
+
+# --------------------------------------------------
+# PDF Text Extractor
+# --------------------------------------------------
 def extract_text_from_pdf(filename):
     text = ""
     try:
@@ -62,7 +67,10 @@ def extract_text_from_pdf(filename):
         print(f"Error reading {filename}: {e}")
     return text
 
-# Prompt builder
+
+# --------------------------------------------------
+# Prompt Builder
+# --------------------------------------------------
 def build_prompt(user_message, documents_text):
     return f"""
 You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK brand.
@@ -94,9 +102,11 @@ You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK bra
 "{documents_text[:12000]}"
 """
 
+
 def format_prompt(user_message):
     global response_count
 
+    # Brand-specific corrections
     user_message = user_message.replace("rukvest", "RUKVEST").replace("rukvests", "RUKVESTS")
     user_message = user_message.replace("ruksak", "RUKSAK").replace("ruksaks", "RUKSAKS")
 
@@ -105,74 +115,57 @@ def format_prompt(user_message):
 
     return build_prompt(user_message, documents_text)
 
-# Reset session
+
+# --------------------------------------------------
+# Session Reset
+# --------------------------------------------------
 def reset_session():
     global response_count
     response_count = 0
 
-def handle_unknown_question():
-    return {
-        "role": "assistant",
-        "content": """🧠 Great question! Let me check on that for you. 
-In the meantime, you can also reach our team directly at 📩 team@ruksak.com - they’ve got your back!"""
-    }
 
-# Response streamer
-def stream_response(user_input):
+# --------------------------------------------------
+# Routes
+# --------------------------------------------------
+
+@app.get("/check")
+async def check():
+    return {"status": "ok"}
+
+
+@app.get("/", response_class=HTMLResponse)
+async def get_chat(request: Request):
+    reset_session()
+    return templates.TemplateResponse("chat.html", {"request": request})
+
+
+@app.post("/chat")
+async def chat_endpoint(request: Request):
+    data = await request.json()
+    user_input = data.get("message", "")
+
     prompt = format_prompt(user_input)
-
     try:
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are RukBot, the casually brilliant gym buddy AI."},
                 {"role": "user", "content": prompt}
-            ],
-            stream=True
+            ]
         )
-
-        for chunk in response:
-            try:
-                content = chunk.choices[0].delta.content
-                if content:
-                    yield content
-            except AttributeError:
-                continue
+        reply = response.choices[0].message.content
 
     except Exception as e:
-        print("⚠️ OpenAI streaming failed:", e)
-        fallback = handle_unknown_question()
-        yield fallback["content"]
+        print("⚠️ OpenAI request failed:", e)
+        reply = "⚠️ Oops, something went wrong."
 
-# Routes
+    # Log to Google Sheets
+    log_to_google_sheet(user_input, reply)
 
-@app.get("/check")
-async def check():
-    return {"status": "ok"}
+    return {"response": reply}
 
-@app.get("/", response_class=HTMLResponse)
-async def get_chat(request: Request):
-    reset_session()  # ensures every new chat starts with the greeting
-    return templates.TemplateResponse("chat.html", {"request": request})
-
-@app.post("/chat")
-async def chat_endpoint(request: Request):
-    data = await request.json()
-    user_input = data.get("message", "")
-    full_response = ""
-
-    def generate():
-        nonlocal full_response
-        for chunk in stream_response(user_input):
-            full_response += chunk
-            yield chunk
-
-    response = StreamingResponse(generate(), media_type="text/plain")
-    response.background = BackgroundTask(log_to_google_sheet, user_input, full_response)
-
-    return response
 
 @app.get("/widget", response_class=HTMLResponse)
 async def get_widget(request: Request):
-    reset_session()  # reset also for widget entry
+    reset_session()
     return templates.TemplateResponse("rukbot-widget.html", {"request": request})
