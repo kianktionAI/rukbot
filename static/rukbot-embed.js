@@ -147,23 +147,14 @@
         body: JSON.stringify({ message: text }),
       });
 
-      if (!response.ok || !response.body) {
+      if (!response.ok) {
         addMessage("⚠️ Server error — please try again.", "bot");
         return;
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let botMsg = document.createElement("div");
-      botMsg.classList.add("rukbot-msg", "bot");
-      messages.appendChild(botMsg);
+      const data = await response.json();
+      addMessage(data.response || "⚠️ Oops, something went wrong.", "bot");
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        botMsg.innerText += decoder.decode(value, { stream: true });
-        messages.scrollTop = messages.scrollHeight;
-      }
     } catch (err) {
       console.error(err);
       addMessage("⚠️ Oops, something went wrong.", "bot");
