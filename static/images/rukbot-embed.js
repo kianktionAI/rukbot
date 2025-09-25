@@ -52,17 +52,25 @@
     padding: 10px;
     overflow-y: auto;
     background: #f9f9f9;
+    display: flex;
+    flex-direction: column;
   }
   .rukbot-msg {
-    background: #eee;
+    max-width: 80%;
     padding: 8px 12px;
     margin: 6px 0;
     border-radius: 10px;
     font-size: 14px;
     line-height: 1.4;
+    word-wrap: break-word;
   }
-  .rukbot-user {
+  .rukbot-msg.bot {
+    background: #eee;
+    align-self: flex-start;
+  }
+  .rukbot-msg.user {
     background: #FFD500;
+    align-self: flex-end;
     text-align: right;
   }
   #rukbot-input-area {
@@ -93,11 +101,11 @@
   container.id = "rukbot-container";
   container.innerHTML = `
     <div id="rukbot-button">
-      <img src="/static/images/rukbot_icon.png" alt="Chat">
+      <img src="https://rukbot.onrender.com/static/images/rukbot_icon.png" alt="Chat">
     </div>
     <div id="rukbot-chat">
       <div id="rukbot-header">
-        <img src="/static/images/RUKSAK-icon.png" alt="RUKSAK Logo">
+        <img src="https://rukbot.onrender.com/static/images/RUKSAK-icon.png" alt="RUKSAK Logo">
         <span>RUKBOT</span>
         <button id="rukbot-close">×</button>
       </div>
@@ -120,8 +128,7 @@
 
   function addMessage(text, sender = "bot") {
     const msg = document.createElement("div");
-    msg.classList.add("rukbot-msg");
-    if (sender === "user") msg.classList.add("rukbot-user");
+    msg.classList.add("rukbot-msg", sender);
     msg.innerText = text;
     messages.appendChild(msg);
     messages.scrollTop = messages.scrollHeight;
@@ -134,13 +141,25 @@
     input.value = "";
 
     try {
-      const response = await fetch("/ask_rukbot", {
+      const response = await fetch("https://rukbot.onrender.com/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: text }),
+        body: JSON.stringify({ message: text }),
       });
-      const data = await response.json();
-      addMessage(data.answer || "⚠️ Sorry, I didn’t catch that.", "bot");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let botMsg = document.createElement("div");
+      botMsg.classList.add("rukbot-msg", "bot");
+      messages.appendChild(botMsg);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        botMsg.innerText += decoder.decode(value);
+        messages.scrollTop = messages.scrollHeight;
+      }
+
     } catch (err) {
       console.error(err);
       addMessage("⚠️ Oops, something went wrong.", "bot");
