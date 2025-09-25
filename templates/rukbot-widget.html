@@ -1,34 +1,25 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>RUKBOT Widget</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='rukbot-widget.css') }}">
-</head>
-<body>
-  <div id="rukbot-widget" class="rukbot-container">
-    <div class="rukbot-header">
-      <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="RUKSAK Logo" />
-      <div class="rukbot-avatars">
-        <img src="{{ url_for('static', filename='images/avatar1.png') }}" />
-        <img src="{{ url_for('static', filename='images/avatar2.png') }}" />
-      </div>
-    </div>
-    <div class="rukbot-body" id="rukbot-body">
-      <p class="rukbot-welcome"><strong>Hey There 👋</strong></p>
-      <p class="rukbot-message">
-        While the team’s out rucking, RUKbot is holding down HQ.
-        I’ll answer what I can, or pass your question to the crew to tackle ASAP via email.
-      </p>
-      <div class="rukbot-chat" id="rukbot-chat"></div>
-      <form id="rukbot-form" onsubmit="sendMessage(event)">
-        <input type="text" id="rukbot-input" placeholder="How can I help?" required />
-        <button type="submit">➤</button>
-      </form>
-    </div>
+<!-- templates/rukbot-widget.html -->
+<div id="rukbot-container">
+  <!-- Floating Button -->
+  <div id="rukbot-button">
+    <img src="/static/images/rukbot_icon.png" alt="Chat">
   </div>
 
-  <script src="{{ url_for('static', filename='rukbot-widget.js') }}"></script>
-</body>
-</html>
+  <!-- Chat Window -->
+  <div id="rukbot-chat">
+    <div id="rukbot-header">
+      <img src="/static/images/RUKSAK-icon.png" alt="RUKSAK Logo">
+      <span>RUKBOT</span>
+      <button id="rukbot-close">×</button>
+    </div>
+    <div id="rukbot-messages"></div>
+    <div id="rukbot-input-area">
+      <input id="rukbot-input" type="text" placeholder="Ask me anything...">
+      <button id="rukbot-send">➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- Link to your CSS/JS -->
+<link rel="stylesheet" href="{{ url_for('static', filename='rukbot-widget.css') }}">
+<script src="{{ url_for('static', filename='rukbot-widget.js') }}"></script>
