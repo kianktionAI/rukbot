@@ -35,49 +35,59 @@
       color: #8cc63f;
     }
     .chat-container {
-      width: 100%;
-      max-width: 480px;
-      margin: 0 auto;
-      padding: 24px 16px 0 16px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    .chat-form {
-      width: 100%;
-      display: flex;
-      flex-direction: column; /* Stack vertically */
-      gap: 8px; /* spacing between input and button */
-      margin-top: 12px;
-    }
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 16px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  height: 80vh; /* gives chat window height */
+  border: 1px solid #ddd;
+  border-radius: 12px;
+}
 
-    .chat-input {
-      flex: 1;
-      font-size: 1.2rem;
-      padding: 16px 14px;
-      border: 2px solid #8cc63f;
-      border-radius: 12px;
-      outline: none;
-      transition: border 0.2s;
-    }
-    .chat-input:focus {
-      border: 2px solid #6dbb2f;
-    }
-    .chat-send {
-      font-size: 1.2rem;
-      padding: 0 28px;
-      background: linear-gradient(90deg, #8cc63f 60%, #6dbb2f 100%);
-      color: #fff;
-      border: none;
-      border-radius: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .chat-send:hover {
-      background: linear-gradient(90deg, #6dbb2f 60%, #8cc63f 100%);
-      color: #1a3d2b;
-    }
+#chat-response {
+  flex: 1; /* grows to fill space above the form */
+  overflow-y: auto;
+  margin-top: 12px;
+  font-size: 1.1rem;
+  white-space: pre-wrap;
+  padding: 8px;
+}
+
+.chat-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chat-input {
+  flex: 1;
+  font-size: 1.2rem;
+  padding: 16px 14px;
+  border: 2px solid #8cc63f;
+  border-radius: 12px;
+  outline: none;
+  transition: border 0.2s;
+}
+.chat-input:focus {
+  border: 2px solid #6dbb2f;
+}
+.chat-send {
+  font-size: 1.2rem;
+  padding: 0 28px;
+  background: linear-gradient(90deg, #8cc63f 60%, #6dbb2f 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.chat-send:hover {
+  background: linear-gradient(90deg, #6dbb2f 60%, #8cc63f 100%);
+  color: #1a3d2b;
+}
     #chat-response {
       width: 100%;
       max-width: 480px;
@@ -124,12 +134,13 @@
     Hi there 👋 <span class="highlight">Ask me anything</span>
   </div>
   <div class="chat-container">
-    <form class="chat-form">
-      <input class="chat-input" type="text" name="user_input" placeholder="Ask me anything..." required />
-      <button class="chat-send" type="submit">Send</button>
-    </form>
-    <div id="chat-response"></div>
-  </div>
+  <div id="chat-response"></div>
+  <form class="chat-form">
+    <input class="chat-input" type="text" name="user_input" placeholder="Ask me anything..." required />
+    <button class="chat-send" type="submit">Send</button>
+  </form>
+</div>
+
 
   <script>
     document.querySelector('.chat-form').onsubmit = async function(e) {

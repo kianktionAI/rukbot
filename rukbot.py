@@ -2,12 +2,9 @@
 
 import os
 import fitz  # PyMuPDF
-import random
 from dotenv import load_dotenv
 from openai import OpenAI
 from datetime import datetime
-from pydrive2.auth import GoogleAuth
-from pydrive2.drive import GoogleDrive
 import gspread
 from google.oauth2.service_account import Credentials
 from fastapi import FastAPI, Request
@@ -35,23 +32,7 @@ from drive_utils import load_google_folder_files
 knowledge_cache = load_google_folder_files("12ZRNwCmVa3d2X5-rBQrbzq7f9aIDesiV")
 
 # Globals
-response_count = 0
-
-GREETINGS_FIRST = [
-    "Hey legend",
-    "G'day mate",
-    "How’s it going, legend?",
-    "Hey there 👋",
-    "Welcome aboard 🚀"
-]
-
-GREETINGS_FOLLOWUP = [
-    "",
-    "Sure thing! 👍",
-    "Here's what I’ve got for you: 👇",
-    "You got it, let’s go 💪",
-    "Happy to help!"
-]
+response_count = 0  # tracks first vs follow-up
 
 # Logging to Google Sheet
 def log_to_google_sheet(question, response):
@@ -121,14 +102,19 @@ You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK bra
 def format_prompt(user_message):
     global response_count
 
+    # Normalise brand casing
     user_message = user_message.replace("rukvest", "RUKVEST").replace("rukvests", "RUKVESTS")
     user_message = user_message.replace("ruksak", "RUKSAK").replace("ruksaks", "RUKSAKS")
 
+    # Load docs
     documents_text = "\n\n".join(knowledge_cache.values())
-    opener = random.choice(GREETINGS_FIRST) + "\n\n" if response_count == 0 else ""
+
+    # Use greeting ONLY on very first response
+    opener = "Hey Legend, how can I help?\n\n" if response_count == 0 else ""
     response_count += 1
 
     return build_prompt(user_message, opener, documents_text)
+
 
 # Reset session
 def reset_session():
@@ -141,7 +127,6 @@ def handle_unknown_question():
         "content": """🧠 Great question! Let me check on that for you. 
 In the meantime, you can also reach our team directly at 📩 team@ruksak.com - they’ve got your back!"""
     }
-
 
 # Response streamer
 def stream_response(user_input):
@@ -170,7 +155,6 @@ def stream_response(user_input):
         fallback = handle_unknown_question()
         yield fallback["content"]
 
-
 # Routes
 
 @app.get("/check")
@@ -179,6 +163,7 @@ async def check():
 
 @app.get("/", response_class=HTMLResponse)
 async def get_chat(request: Request):
+    reset_session()  # ensures every new chat starts with the greeting
     return templates.TemplateResponse("chat.html", {"request": request})
 
 @app.post("/chat")
@@ -200,4 +185,5 @@ async def chat_endpoint(request: Request):
 
 @app.get("/widget", response_class=HTMLResponse)
 async def get_widget(request: Request):
+    reset_session()  # reset also for widget entry
     return templates.TemplateResponse("rukbot-widget.html", {"request": request})
