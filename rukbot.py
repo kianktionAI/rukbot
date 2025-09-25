@@ -8,7 +8,7 @@ from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 
@@ -33,10 +33,7 @@ knowledge_cache = load_google_folder_files("12ZRNwCmVa3d2X5-rBQrbzq7f9aIDesiV")
 # Globals
 response_count = 0  # tracks first vs follow-up
 
-
-# --------------------------------------------------
 # Logging to Google Sheet
-# --------------------------------------------------
 def log_to_google_sheet(question, response):
     try:
         creds = Credentials.from_service_account_file(
@@ -53,10 +50,7 @@ def log_to_google_sheet(question, response):
     except Exception as e:
         print("⚠️ Logging to Google Sheet failed:", e)
 
-
-# --------------------------------------------------
-# PDF Text Extractor
-# --------------------------------------------------
+# Extract PDF text
 def extract_text_from_pdf(filename):
     text = ""
     try:
@@ -67,10 +61,7 @@ def extract_text_from_pdf(filename):
         print(f"Error reading {filename}: {e}")
     return text
 
-
-# --------------------------------------------------
-# Prompt Builder
-# --------------------------------------------------
+# Prompt builder
 def build_prompt(user_message, documents_text):
     return f"""
 You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK brand.
@@ -102,11 +93,9 @@ You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK bra
 "{documents_text[:12000]}"
 """
 
-
 def format_prompt(user_message):
     global response_count
 
-    # Brand-specific corrections
     user_message = user_message.replace("rukvest", "RUKVEST").replace("rukvests", "RUKVESTS")
     user_message = user_message.replace("ruksak", "RUKSAK").replace("ruksaks", "RUKSAKS")
 
@@ -115,36 +104,18 @@ def format_prompt(user_message):
 
     return build_prompt(user_message, documents_text)
 
-
-# --------------------------------------------------
-# Session Reset
-# --------------------------------------------------
+# Reset session
 def reset_session():
     global response_count
     response_count = 0
 
+def handle_unknown_question():
+    return "🧠 Great question! Let me check on that for you. In the meantime, you can also reach our team directly at 📩 team@ruksak.com - they’ve got your back!"
 
-# --------------------------------------------------
-# Routes
-# --------------------------------------------------
-
-@app.get("/check")
-async def check():
-    return {"status": "ok"}
-
-
-@app.get("/", response_class=HTMLResponse)
-async def get_chat(request: Request):
-    reset_session()
-    return templates.TemplateResponse("chat.html", {"request": request})
-
-
-@app.post("/chat")
-async def chat_endpoint(request: Request):
-    data = await request.json()
-    user_input = data.get("message", "")
-
+# Generate full response (non-streaming)
+def get_full_response(user_input):
     prompt = format_prompt(user_input)
+
     try:
         response = client.chat.completions.create(
             model="gpt-4",
@@ -153,17 +124,32 @@ async def chat_endpoint(request: Request):
                 {"role": "user", "content": prompt}
             ]
         )
-        reply = response.choices[0].message.content
-
+        return response.choices[0].message.content.strip()
     except Exception as e:
         print("⚠️ OpenAI request failed:", e)
-        reply = "⚠️ Oops, something went wrong."
+        return handle_unknown_question()
 
-    # Log to Google Sheets
-    log_to_google_sheet(user_input, reply)
+# Routes
 
-    return {"response": reply}
+@app.get("/check")
+async def check():
+    return {"status": "ok"}
 
+@app.get("/", response_class=HTMLResponse)
+async def get_chat(request: Request):
+    reset_session()  # ensures every new chat starts fresh
+    return templates.TemplateResponse("chat.html", {"request": request})
+
+@app.post("/chat")
+async def chat_endpoint(request: Request):
+    data = await request.json()
+    user_input = data.get("message", "")
+    full_response = get_full_response(user_input)
+
+    # log in background (no BackgroundTask needed here)
+    log_to_google_sheet(user_input, full_response)
+
+    return JSONResponse({"response": full_response})
 
 @app.get("/widget", response_class=HTMLResponse)
 async def get_widget(request: Request):
