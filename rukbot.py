@@ -63,9 +63,7 @@ def extract_text_from_pdf(filename):
     return text
 
 # Prompt builder
-def build_prompt(user_message, opener, documents_text, is_first):
-    greeting_instruction = f"👋 Start your message with: {opener}" if is_first else ""
-
+def build_prompt(user_message, documents_text):
     return f"""
 You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK brand.
 
@@ -89,8 +87,6 @@ You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK bra
 🧠 “Great question! Let me check on that for you.”  
 📩 You can also reach our team directly at team@ruksak.com — they’ve got your back!
 
-{greeting_instruction}
-
 🧠 Customer asked:
 "{user_message}"
 
@@ -105,12 +101,9 @@ def format_prompt(user_message):
     user_message = user_message.replace("ruksak", "RUKSAK").replace("ruksaks", "RUKSAKS")
 
     documents_text = "\n\n".join(knowledge_cache.values())
-    is_first = response_count == 0
-    opener = "Hey Legend, how can I help?\n\n" if is_first else ""
     response_count += 1
 
-    return build_prompt(user_message, opener, documents_text, is_first)
-
+    return build_prompt(user_message, documents_text)
 
 # Reset session
 def reset_session():
