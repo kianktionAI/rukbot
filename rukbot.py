@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 # Load environment variables
 load_dotenv()
@@ -19,6 +20,15 @@ load_dotenv()
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+# ✅ Enable CORS for embedding anywhere
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # Anyone can embed the widget
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Setup OpenAI client
 client = OpenAI(
@@ -146,7 +156,7 @@ async def chat_endpoint(request: Request):
     user_input = data.get("message", "")
     full_response = get_full_response(user_input)
 
-    # log in background (no BackgroundTask needed here)
+    # log in background
     log_to_google_sheet(user_input, full_response)
 
     return JSONResponse({"response": full_response})
