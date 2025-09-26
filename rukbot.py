@@ -18,17 +18,15 @@ load_dotenv()
 
 # FastAPI app
 app = FastAPI()
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
-
-# ✅ Enable CORS for embedding anywhere
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # Anyone can embed the widget
-    allow_credentials=False,
+    allow_origins=["*"],  # allows embedding anywhere
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
 # Setup OpenAI client
 client = OpenAI(
@@ -42,6 +40,7 @@ knowledge_cache = load_google_folder_files("12ZRNwCmVa3d2X5-rBQrbzq7f9aIDesiV")
 
 # Globals
 response_count = 0  # tracks first vs follow-up
+
 
 # Logging to Google Sheet
 def log_to_google_sheet(question, response):
@@ -60,6 +59,7 @@ def log_to_google_sheet(question, response):
     except Exception as e:
         print("⚠️ Logging to Google Sheet failed:", e)
 
+
 # Extract PDF text
 def extract_text_from_pdf(filename):
     text = ""
@@ -70,6 +70,7 @@ def extract_text_from_pdf(filename):
     except Exception as e:
         print(f"Error reading {filename}: {e}")
     return text
+
 
 # Prompt builder
 def build_prompt(user_message, documents_text):
@@ -84,6 +85,7 @@ You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK bra
 - Speak human: avoid fluff, repetition, or robotic-sounding replies
 
 ❌ Avoid:
+- Greetings like “Hey there”, “Hi”, or “Hello”
 - Salesy hype like “transform your body”, “biohack”, “game changer”
 - Mentioning documents, sources, or file references
 - Overloading with info — only answer what’s asked
@@ -103,6 +105,7 @@ You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK bra
 "{documents_text[:12000]}"
 """
 
+
 def format_prompt(user_message):
     global response_count
 
@@ -114,13 +117,16 @@ def format_prompt(user_message):
 
     return build_prompt(user_message, documents_text)
 
+
 # Reset session
 def reset_session():
     global response_count
     response_count = 0
 
+
 def handle_unknown_question():
     return "🧠 Great question! Let me check on that for you. In the meantime, you can also reach our team directly at 📩 team@ruksak.com - they’ve got your back!"
+
 
 # Generate full response (non-streaming)
 def get_full_response(user_input):
@@ -130,7 +136,17 @@ def get_full_response(user_input):
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are RukBot, the casually brilliant gym buddy AI."},
+                {
+                    "role": "system",
+                    "content": (
+                        "You are RukBot, the casually brilliant gym buddy AI. "
+                        "Do NOT start with greetings like 'Hey there', 'Hi', or 'Hello'. "
+                        "Answer directly, keeping responses short, sharp, and aligned with brand tone. "
+                        "Use brand phrases where relevant: 'Move with meaning', 'Start light and build', "
+                        "and 'We've got your back (literally)'. "
+                        "No filler, no generic intros — just get straight to the helpful answer."
+                    )
+                },
                 {"role": "user", "content": prompt}
             ]
         )
@@ -139,16 +155,18 @@ def get_full_response(user_input):
         print("⚠️ OpenAI request failed:", e)
         return handle_unknown_question()
 
-# Routes
 
+# Routes
 @app.get("/check")
 async def check():
     return {"status": "ok"}
+
 
 @app.get("/", response_class=HTMLResponse)
 async def get_chat(request: Request):
     reset_session()  # ensures every new chat starts fresh
     return templates.TemplateResponse("chat.html", {"request": request})
+
 
 @app.post("/chat")
 async def chat_endpoint(request: Request):
@@ -156,10 +174,11 @@ async def chat_endpoint(request: Request):
     user_input = data.get("message", "")
     full_response = get_full_response(user_input)
 
-    # log in background
+    # log in background (no BackgroundTask needed here)
     log_to_google_sheet(user_input, full_response)
 
     return JSONResponse({"response": full_response})
+
 
 @app.get("/widget", response_class=HTMLResponse)
 async def get_widget(request: Request):
