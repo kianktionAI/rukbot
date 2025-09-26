@@ -152,11 +152,16 @@
         return;
       }
 
-      const data = await response.json();
-      addMessage(data.response || "⚠️ Oops, something went wrong.", "bot");
+      const data = await response.json().catch(() => null);
+
+      if (data && data.response) {
+        addMessage(data.response, "bot");
+      } else {
+        addMessage("⚠️ No response received from RUKBOT.", "bot");
+      }
 
     } catch (err) {
-      console.error(err);
+      console.error("Fetch error:", err);
       addMessage("⚠️ Oops, something went wrong.", "bot");
     }
   }
