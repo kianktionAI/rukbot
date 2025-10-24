@@ -13,16 +13,15 @@ from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from drive_utils import load_google_folder_files
-from secrets_backup.rukbot_config import CONFIG
 
 # =====================================================
 # 1️⃣ ENVIRONMENT SETUP
 # =====================================================
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") or CONFIG["OPENAI_API_KEY"]
-OPENAI_PROJECT_ID = os.getenv("OPENAI_PROJECT_ID") or os.getenv("OPENAI_PROJECT_ID")
-GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID") or CONFIG["GOOGLE_DRIVE_FOLDER_ID"]
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_PROJECT_ID = os.getenv("OPENAI_PROJECT_ID")
+GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "12ZRNwCmVa3d2X5-rBQrbzq7f9aIDesiV")
 
 print("🚀 Starting RukBot server...")
 print(f"🧩 Using Drive folder ID: {GOOGLE_DRIVE_FOLDER_ID}")
@@ -67,10 +66,17 @@ response_count = 0  # tracks first vs follow-up
 # =====================================================
 def log_to_google_sheet(question, response):
     try:
+        creds_path = (
+            "/etc/secrets/service_account.json"
+            if os.getenv("RENDER")
+            else "service_account_rukbot.json"
+        )
+
         creds = Credentials.from_service_account_file(
-            "service_account_rukbot.json",
+            creds_path,
             scopes=["https://www.googleapis.com/auth/spreadsheets"]
         )
+
         sheet = gspread.authorize(creds).open("RukBot Logs")
         worksheet = sheet.worksheet("Sheet1")
         worksheet.append_row([
