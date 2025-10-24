@@ -105,23 +105,22 @@ def extract_text_from_pdf(filename):
 # =====================================================
 def build_prompt(user_message, documents_text):
     return f"""
-You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK brand.
+You are RukBot — the casually brilliant AI trained on the RUKVEST and RUKSAK brand.
 
 🗣️ Tone & Style:
 - Friendly, like a helpful gym buddy
-- Keep replies short, sharp, and mobile-friendly
-- Add emojis when helpful (not overdone)
-- Speak human: avoid fluff or robotic phrasing
+- Short, sharp, and mobile-friendly
+- Add emojis sparingly for emphasis
+- Speak human — no corporate jargon, no sales pitch
 
 ❌ Avoid:
-- Greetings like “Hey there”, “Hi”, or “Hello”
-- Salesy language like “biohack”, “transform your life”
-- Mentioning documents or file references
-- Giving irrelevant or excessive detail
+- Greetings (“Hey there”, “Hi”, “Hello”)
+- Mentioning sources, documents, or PDFs
+- Overly long or robotic answers
 
 🎯 Mission:
-Help customers make confident decisions quickly, clearly, and authentically.
-If you’re unsure, reply:
+Give clear, confident answers to help customers quickly.
+If uncertain, reply:
 🧠 “Great question! Let me check on that for you.”
 📩 “You can also reach our team at team@ruksak.com — they’ve got your back!”
 
@@ -141,18 +140,25 @@ def format_prompt(user_message):
     response_count += 1
 
     # Determine product focus
-    if "vest" in msg or "rukvest" in msg:
+    if "rukvest" in msg or "vest" in msg:
         relevant_docs = [
             knowledge_cache.get("RUKVEST_Product_Info.pdf", ""),
+            knowledge_cache.get("RukBot FAQ.pdf", ""),
             knowledge_cache.get("RUKBOT_Product_Comparison_Cheat_Sheet.pdf", "")
         ]
-    elif "bag" in msg or "ruksak" in msg or "rucksack" in msg:
+    elif "ruksak" in msg or "rucksack" in msg or "bag" in msg:
         relevant_docs = [
             knowledge_cache.get("RUKSAK_Product_Info.pdf", ""),
+            knowledge_cache.get("RukBot FAQ.pdf", ""),
             knowledge_cache.get("RUKBOT_Product_Comparison_Cheat_Sheet.pdf", "")
         ]
+    elif "rukbrik" in msg or "brick" in msg:
+        relevant_docs = [
+            knowledge_cache.get("RUKBRIK_Product_Info.pdf", ""),
+            knowledge_cache.get("RukBot FAQ.pdf", "")
+        ]
     else:
-        # General fallback to FAQ or comparison
+        # General fallback
         relevant_docs = [
             knowledge_cache.get("RukBot FAQ.pdf", ""),
             knowledge_cache.get("RUKBOT_Product_Comparison_Cheat_Sheet.pdf", "")
@@ -179,8 +185,9 @@ def get_full_response(user_input):
                 {
                     "role": "system",
                     "content": (
-                        "You are RukBot, the casually brilliant AI for RUKVEST & RUKSAK. "
-                        "Never greet the user, never sound robotic, and only give short, clear, confident replies."
+                        "You are RukBot — a casually brilliant AI for RUKVEST & RUKSAK. "
+                        "Be concise, confident, and kind. Never greet the user. "
+                        "Use emojis only to support clarity."
                     )
                 },
                 {"role": "user", "content": prompt}
