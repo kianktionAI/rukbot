@@ -1,14 +1,56 @@
-token.json
-credentials.json
-.env
-*.pyc
+# === Python ===
 __pycache__/
-config.json
-rukbot_config.json
-rukbot_config.py
-echo -e "token.json\n.env\nconfig.json\nrukbot_config.py\ncredentials.json\n__pycache__/\n*.pyc" > .gitignore
-# Ignore Python bytecode and cache files
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+.eggs/
+build/
+dist/
+pip-wheel-metadata/
+
+# === Environment ===
+.env
+*.env
+.venv/
+venv/
+ENV/
+env/
+pythonenv*
+
+# === IDE & OS Files ===
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# === Logs ===
+*.log
+logs/
+*.out
+
+# === Config & Credentials ===
+secrets_backup/
+client_secrets.json
 service_account.json
 service_account_rukbot.json
-.DS_Store
-HOLDapp.py
+rukbot_config.json
+
+# === Cached or Temp Files ===
+*.tmp
+*.bak
+*.swp
+*.swo
+*.old
+
+# === Node / Frontend Build (if applicable) ===
+frontend_widget/node_modules/
+frontend_widget/dist/
+frontend_widget/.next/
+frontend_widget/build/
+
+# === Render or Deployment ===
+requirements.render.txt
+runtime.txt

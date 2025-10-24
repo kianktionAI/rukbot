@@ -1,0 +1,85 @@
+/* Force redeploy - test update */
+.rukbot-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 340px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  font-family: 'Inter', sans-serif;
+  z-index: 9999;
+  overflow: hidden;
+}
+
+.rukbot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #FFD83D;
+  padding: 10px;
+}
+
+.rukbot-header img {
+  height: 32px;
+}
+
+.rukbot-avatars img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  margin-left: 4px;
+}
+
+.rukbot-body {
+  padding: 12px;
+  font-size: 14px;
+}
+
+.rukbot-welcome {
+  font-weight: bold;
+  margin: 0;
+}
+
+.rukbot-chat {
+  margin-top: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.rukbot-user, .rukbot-response {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.rukbot-user {
+  background: #FFF49A;
+  align-self: flex-end;
+}
+
+.rukbot-response {
+  background: #F2F2F2;
+}
+
+#rukbot-form {
+  display: flex;
+  margin-top: 10px;
+}
+
+#rukbot-input {
+  flex: 1;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
+#rukbot-form button {
+  background: #FFD83D;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 16px;
+  margin-left: 5px;
+}
+
