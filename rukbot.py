@@ -32,7 +32,7 @@ print(f"🧩 Using Drive folder ID: {GOOGLE_DRIVE_FOLDER_ID}")
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allows embedding anywhere
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -109,21 +109,21 @@ You are RukBot — a casually brilliant AI trained on the RUKVEST and RUKSAK bra
 
 🗣️ Tone & Style:
 - Friendly, like a helpful gym buddy
-- Keep replies short, sharp, and easy to skim (mobile-friendly)
-- Add emojis when helpful (but not overdone)
-- Speak human: avoid fluff, repetition, or robotic-sounding replies
+- Keep replies short, sharp, and mobile-friendly
+- Add emojis when helpful (not overdone)
+- Speak human: avoid fluff or robotic phrasing
 
 ❌ Avoid:
 - Greetings like “Hey there”, “Hi”, or “Hello”
-- Salesy hype like “transform your body”, “biohack”, “game changer”
-- Mentioning documents, sources, or file references
-- Overloading with info — only answer what’s asked
+- Salesy language like “biohack”, “transform your life”
+- Mentioning documents or file references
+- Giving irrelevant or excessive detail
 
 🎯 Mission:
-Help the customer make fast, confident decisions — clearly and authentically.
-If unsure, respond:
+Help customers make confident decisions quickly, clearly, and authentically.
+If you’re unsure, reply:
 🧠 “Great question! Let me check on that for you.”
-📩 “You can also reach our team directly at team@ruksak.com — they’ve got your back!”
+📩 “You can also reach our team at team@ruksak.com — they’ve got your back!”
 
 🧠 Customer asked:
 "{user_message}"
@@ -132,20 +132,37 @@ If unsure, respond:
 "{documents_text[:12000]}"
 """
 
+# =====================================================
+# 8️⃣ TARGETED KNOWLEDGE RETRIEVAL
+# =====================================================
 def format_prompt(user_message):
     global response_count
-    user_message = (
-        user_message.replace("rukvest", "RUKVEST")
-        .replace("rukvests", "RUKVESTS")
-        .replace("ruksak", "RUKSAK")
-        .replace("ruksaks", "RUKSAKS")
-    )
-    documents_text = "\n\n".join(knowledge_cache.values())
+    msg = user_message.lower()
     response_count += 1
+
+    # Determine product focus
+    if "vest" in msg or "rukvest" in msg:
+        relevant_docs = [
+            knowledge_cache.get("RUKVEST_Product_Info.pdf", ""),
+            knowledge_cache.get("RUKBOT_Product_Comparison_Cheat_Sheet.pdf", "")
+        ]
+    elif "bag" in msg or "ruksak" in msg or "rucksack" in msg:
+        relevant_docs = [
+            knowledge_cache.get("RUKSAK_Product_Info.pdf", ""),
+            knowledge_cache.get("RUKBOT_Product_Comparison_Cheat_Sheet.pdf", "")
+        ]
+    else:
+        # General fallback to FAQ or comparison
+        relevant_docs = [
+            knowledge_cache.get("RukBot FAQ.pdf", ""),
+            knowledge_cache.get("RUKBOT_Product_Comparison_Cheat_Sheet.pdf", "")
+        ]
+
+    documents_text = "\n\n".join([doc for doc in relevant_docs if doc])
     return build_prompt(user_message, documents_text)
 
 # =====================================================
-# 8️⃣ RESPONSE GENERATION
+# 9️⃣ RESPONSE GENERATION
 # =====================================================
 def handle_unknown_question():
     return (
@@ -157,18 +174,18 @@ def get_full_response(user_input):
     prompt = format_prompt(user_input)
     try:
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[
                 {
                     "role": "system",
                     "content": (
-                        "You are RukBot, the casually brilliant gym buddy AI. "
-                        "Do NOT start with greetings. "
-                        "Be sharp, real, and human — skip fluff and stay authentic."
+                        "You are RukBot, the casually brilliant AI for RUKVEST & RUKSAK. "
+                        "Never greet the user, never sound robotic, and only give short, clear, confident replies."
                     )
                 },
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            temperature=0.7
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -176,7 +193,7 @@ def get_full_response(user_input):
         return handle_unknown_question()
 
 # =====================================================
-# 9️⃣ FASTAPI ROUTES
+# 🔟 FASTAPI ROUTES
 # =====================================================
 @app.get("/check")
 async def check():
