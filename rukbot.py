@@ -177,22 +177,50 @@ def handle_unknown_question():
     )
 
 def get_full_response(user_input):
+    # =====================================================
+    # 🛡️ STEP 1: Cross-Product Safeguard Rules
+    # =====================================================
+    text = user_input.lower()
+
+    # Disallow mixed product combos (RUKVEST + RUKBRIK, etc.)
+    invalid_pairs = [
+        ("rukvest", "rukbrik"),
+        ("rukbrik", "rukvest"),
+        ("rukvest", "rukblock"),
+        ("rukblock", "rukvest"),
+    ]
+    for a, b in invalid_pairs:
+        if a in text and b in text:
+            print("⚠️ Cross-product combination detected — triggering fallback.")
+            return (
+                "That combo doesn’t sound right — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
+            )
+
+    # =====================================================
+    # 🧠 STEP 2: Strict FAQ-Only System Instruction
+    # =====================================================
+    strict_system_message = (
+        "You are RukBot — the casually brilliant AI for RUKVEST & RUKSAK. "
+        "You must only answer using the verified FAQ and product information provided in the prompt. "
+        "If you cannot confidently find the answer, always reply with:\n"
+        "“I’m not 100% on that one — best to check with our team at team@ruksak.com — they’ve got your back!”\n\n"
+        "Maintain the RUKBOT brand tone: concise, confident, and kind. "
+        "Never open with greetings. Never mention 'documents' or 'sources'. "
+        "Use emojis only to support clarity or positivity."
+    )
+
+    # =====================================================
+    # 🎯 Build Prompt and Call OpenAI
+    # =====================================================
     prompt = format_prompt(user_input)
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are RukBot — a casually brilliant AI for RUKVEST & RUKSAK. "
-                        "Be concise, confident, and kind. Never greet the user. "
-                        "Use emojis only to support clarity."
-                    )
-                },
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": strict_system_message},
+                {"role": "user", "content": prompt},
             ],
-            temperature=0.7
+            temperature=0.7,
         )
 
         # ✅ Safely extract the response content
@@ -202,20 +230,34 @@ def get_full_response(user_input):
             else str(response.choices[0].message)
         )
 
-        # 🧠 Confidence fallback check
-        low_confidence_terms = ["not sure", "unsure", "can't tell", "uncertain", "i think"]
+        # =====================================================
+        # 🔍 Confidence Fallback Detection
+        # =====================================================
+        low_confidence_terms = [
+            "not sure", "unsure", "can't tell", "uncertain", "i think", "unknown"
+        ]
         if any(term in full_text.lower() for term in low_confidence_terms):
-            print("⚠️ Low confidence detected. Diverting to email fallback.")
+            print("⚠️ Low confidence detected — diverting to email fallback.")
             return (
-                "🧠 Great question! Let me check on that for you. "
-                "In the meantime, you can reach our team at 📩 team@ruksak.com — they’ve got your back!"
+                "I’m not 100% on that one — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
             )
+
+        # =====================================================
+        # 🧩 Ensure every unsure-style answer includes the contact line
+        # =====================================================
+        if "team@ruksak.com" not in full_text.lower() and (
+            "not sure" in full_text.lower() or "unsure" in full_text.lower()
+        ):
+            full_text += " 📩 You can check with our team at team@ruksak.com — they’ve got your back!"
 
         return full_text
 
     except Exception as e:
         print(f"⚠️ OpenAI request failed: {e}")
-        return handle_unknown_question()
+        return (
+            "Something went a bit sideways there — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
+        )
+
 
 # =====================================================
 # 🔟 FASTAPI ROUTES
