@@ -214,3 +214,21 @@ def get_full_response(user_input):
     except Exception as e:
         print(f"⚠️ OpenAI request failed: {e}")
         return fallback_msg
+
+# =====================================================
+# 11️⃣ TEST & CHAT ENDPOINTS
+# =====================================================
+
+@app.get("/")
+async def root():
+    return {"message": "RukBot backend is running 🚀"}
+
+@app.post("/ask")
+async def ask(request: Request):
+    data = await request.json()
+    user_input = data.get("message", "")
+    if not user_input:
+        return JSONResponse({"error": "No message provided"}, status_code=400)
+
+    response = get_full_response(user_input)
+    return {"response": response}
