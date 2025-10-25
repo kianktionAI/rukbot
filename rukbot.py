@@ -194,7 +194,25 @@ def get_full_response(user_input):
             ],
             temperature=0.7
         )
-        return response.choices[0].message.content.strip()
+
+        # ✅ Safely extract the response content
+        full_text = (
+            response.choices[0].message.content.strip()
+            if hasattr(response.choices[0].message, "content")
+            else str(response.choices[0].message)
+        )
+
+        # 🧠 Confidence fallback check
+        low_confidence_terms = ["not sure", "unsure", "can't tell", "uncertain", "i think"]
+        if any(term in full_text.lower() for term in low_confidence_terms):
+            print("⚠️ Low confidence detected. Diverting to email fallback.")
+            return (
+                "🧠 Great question! Let me check on that for you. "
+                "In the meantime, you can reach our team at 📩 team@ruksak.com — they’ve got your back!"
+            )
+
+        return full_text
+
     except Exception as e:
         print(f"⚠️ OpenAI request failed: {e}")
         return handle_unknown_question()
