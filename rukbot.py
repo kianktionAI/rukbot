@@ -100,7 +100,7 @@ def extract_text_from_pdf(filename):
         print(f"Error reading {filename}: {e}")
     return text
 
-## =====================================================
+# =====================================================
 # 7️⃣ SYSTEM PROMPT — STRICT ACCURACY MODE
 # =====================================================
 SYSTEM_PROMPT = """
@@ -187,22 +187,20 @@ def get_full_response(user_input):
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.0,  # reduce creativity to eliminate hallucination
-            logprobs=True,    # enables confidence estimation
+            temperature=0.0,
+            logprobs=True,
             top_p=1
         )
         answer = response.choices[0].message.content.strip()
 
-        # Confidence proxy: check the average token logprob (simple heuristic)
         logprobs = response.choices[0].logprobs
         if logprobs and hasattr(logprobs, "content"):
             avg_conf = sum(token.logprob for token in logprobs.content) / len(logprobs.content)
-            confidence = min(1.0, max(0.0, 1 + (avg_conf / 5)))  # normalize roughly to 0–1
+            confidence = min(1.0, max(0.0, 1 + (avg_conf / 5)))
             if confidence < 0.9:
                 print(f"⚠️ Low confidence detected ({confidence:.2f}), using fallback.")
                 return fallback_msg
 
-        # Secondary safeguard: check for uncertain language
         uncertain_phrases = [
             "let me check", "not sure", "maybe", "i think", "possibly", "i’ll find out"
         ]
@@ -216,19 +214,23 @@ def get_full_response(user_input):
         return fallback_msg
 
 # =====================================================
-# 11️⃣ TEST & CHAT ENDPOINTS
+# 11️⃣ REFRESH KNOWLEDGE ENDPOINT
 # =====================================================
+@app.get("/refresh_knowledge")
+async def refresh_knowledge():
+    """Reload knowledge base files from Google Drive"""
+    global knowledge_cache
+    try:
+        knowledge_cache = load_google_folder_files(GOOGLE_DRIVE_FOLDER_ID)
+        print(f"✅ Refreshed knowledge base with {len(knowledge_cache)} files.")
+        return {"status": "success", "files_loaded": len(knowledge_cache)}
+    except Exception as e:
+        print(f"❌ Failed to refresh knowledge base: {e}")
+        return {"status": "error", "message": str(e)}
 
-@app.get("/")
-async def root():
-    return {"message": "RukBot backend is running 🚀"}
-
-@app.post("/ask")
-async def ask(request: Request):
-    data = await request.json()
-    user_input = data.get("message", "")
-    if not user_input:
-        return JSONResponse({"error": "No message provided"}, status_code=400)
-
-    response = get_full_response(user_input)
-    return {"response": response}
+# =====================================================
+# ✅ HEALTH CHECK ENDPOINT
+# =====================================================
+@app.get("/check")
+async def check():
+    return {"status": "ok"}
