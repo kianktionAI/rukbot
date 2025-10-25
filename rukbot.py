@@ -100,46 +100,50 @@ def extract_text_from_pdf(filename):
         print(f"Error reading {filename}: {e}")
     return text
 
+## =====================================================
+# 7️⃣ SYSTEM PROMPT — STRICT ACCURACY MODE
 # =====================================================
-# 7️⃣ PROMPT GENERATION
-# =====================================================
-def build_prompt(user_message, documents_text):
-    return f"""
-You are RukBot — the casually brilliant AI trained on the RUKVEST and RUKSAK brand.
+SYSTEM_PROMPT = """
+You are RUKBOT — the official support assistant for RUKSAK and RUKVEST.
 
-🗣️ Tone & Style:
-- Friendly, like a helpful gym buddy
-- Short, sharp, and mobile-friendly
-- Add emojis sparingly for emphasis
-- Speak human — no corporate jargon, no sales pitch
+🎯 PURPOSE:
+Answer customer questions using ONLY verified information from the official RUKBOT FAQ and product documents.
+If you are less than 90% confident in your answer or the information is not explicitly stated, DO NOT guess.
+Instead, reply with this exact message:
+"Hey legend, I’m not 100% sure on that one — best to flick a quick email to team@ruksak.com and they’ll look after you."
 
-❌ Avoid:
-- Greetings (“Hey there”, “Hi”, “Hello”)
-- Mentioning sources, documents, or PDFs
-- Overly long or robotic answers
-
-🎯 Mission:
-Give clear, confident answers to help customers quickly.
-If uncertain, reply:
-🧠 “Great question! Let me check on that for you.”
-📩 “You can also reach our team at team@ruksak.com — they’ve got your back!”
-
-🧠 Customer asked:
-"{user_message}"
-
-📚 Relevant Knowledge:
-"{documents_text[:12000]}"
+🧭 RULES:
+1. Never invent or assume facts.
+2. Never say "let me check" or imply you can look something up.
+3. Keep replies short, friendly, and human — like a supportive gym buddy.
+4. Use emojis naturally (💪 🎒 ✨ 💧).
+5. Only use content clearly contained in the provided FAQ/product data.
+6. If multiple answers exist, summarise briefly without assumptions.
+7. If unsure or confidence <90%, always default to the email fallback.
 """
 
 # =====================================================
-# 8️⃣ TARGETED KNOWLEDGE RETRIEVAL
+# 8️⃣ PROMPT GENERATION
+# =====================================================
+def build_prompt(user_message, documents_text):
+    return f"""
+The user asked:
+"{user_message}"
+
+Here are the verified product and FAQ details you can use:
+{documents_text[:12000]}
+
+Remember:
+- Use only the information above.
+- If confidence <90%, respond with the fallback message.
+- Maintain RUKBOT’s upbeat, friendly style.
+"""
+
+# =====================================================
+# 9️⃣ TARGETED KNOWLEDGE RETRIEVAL
 # =====================================================
 def format_prompt(user_message):
-    global response_count
     msg = user_message.lower()
-    response_count += 1
-
-    # Determine product focus
     if "rukvest" in msg or "vest" in msg:
         relevant_docs = [
             knowledge_cache.get("RUKVEST_Product_Info.pdf", ""),
@@ -158,7 +162,6 @@ def format_prompt(user_message):
             knowledge_cache.get("RukBot FAQ.pdf", "")
         ]
     else:
-        # General fallback
         relevant_docs = [
             knowledge_cache.get("RukBot FAQ.pdf", ""),
             knowledge_cache.get("RUKBOT_Product_Comparison_Cheat_Sheet.pdf", "")
@@ -168,72 +171,46 @@ def format_prompt(user_message):
     return build_prompt(user_message, documents_text)
 
 # =====================================================
-# 9️⃣ RESPONSE GENERATION
+# 🔟 RESPONSE GENERATION WITH CONFIDENCE CHECK
 # =====================================================
-def handle_unknown_question():
-    return (
-        "🧠 Great question! Let me check on that for you. "
-        "In the meantime, you can reach our team at 📩 team@ruksak.com — they’ve got your back!"
-    )
-
 def get_full_response(user_input):
     prompt = format_prompt(user_input)
+    fallback_msg = (
+        "Hey legend, I’m not 100% sure on that one — best to flick a quick email "
+        "to team@ruksak.com and they’ll look after you."
+    )
+
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are RukBot — a casually brilliant AI for RUKVEST & RUKSAK. "
-                        "Be concise, confident, and kind. Never greet the user. "
-                        "Use emojis only to support clarity."
-                    )
-                },
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7
+            temperature=0.0,  # reduce creativity to eliminate hallucination
+            logprobs=True,    # enables confidence estimation
+            top_p=1
         )
-        return response.choices[0].message.content.strip()
+        answer = response.choices[0].message.content.strip()
+
+        # Confidence proxy: check the average token logprob (simple heuristic)
+        logprobs = response.choices[0].logprobs
+        if logprobs and hasattr(logprobs, "content"):
+            avg_conf = sum(token.logprob for token in logprobs.content) / len(logprobs.content)
+            confidence = min(1.0, max(0.0, 1 + (avg_conf / 5)))  # normalize roughly to 0–1
+            if confidence < 0.9:
+                print(f"⚠️ Low confidence detected ({confidence:.2f}), using fallback.")
+                return fallback_msg
+
+        # Secondary safeguard: check for uncertain language
+        uncertain_phrases = [
+            "let me check", "not sure", "maybe", "i think", "possibly", "i’ll find out"
+        ]
+        if any(p in answer.lower() for p in uncertain_phrases):
+            return fallback_msg
+
+        return answer or fallback_msg
+
     except Exception as e:
         print(f"⚠️ OpenAI request failed: {e}")
-        return handle_unknown_question()
-
-# =====================================================
-# 🔟 FASTAPI ROUTES
-# =====================================================
-@app.get("/check")
-async def check():
-    return {"status": "ok"}
-
-@app.get("/", response_class=HTMLResponse)
-async def get_chat(request: Request):
-    global response_count
-    response_count = 0
-    return templates.TemplateResponse("chat.html", {"request": request})
-
-@app.post("/chat")
-async def chat_endpoint(request: Request):
-    data = await request.json()
-    user_input = data.get("message", "")
-    full_response = get_full_response(user_input)
-    log_to_google_sheet(user_input, full_response)
-    return JSONResponse({"response": full_response})
-
-@app.get("/widget", response_class=HTMLResponse)
-async def get_widget(request: Request):
-    global response_count
-    response_count = 0
-    return templates.TemplateResponse("rukbot-widget.html", {"request": request})
-
-@app.post("/refresh-knowledge")
-async def refresh_knowledge():
-    global knowledge_cache
-    try:
-        print("🔄 Refreshing RukBot Knowledge Base...")
-        knowledge_cache = load_google_folder_files(GOOGLE_DRIVE_FOLDER_ID)
-        print("✅ Knowledge base refreshed successfully.")
-        return JSONResponse({"status": "success", "message": "Knowledge base refreshed successfully."})
-    except Exception as e:
-        print(f"❌ Error refreshing knowledge base: {e}")
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+        return fallback_msg
