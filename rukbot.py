@@ -1,10 +1,10 @@
-# rukbot.py
-
 import os
 import fitz  # PyMuPDF
 from dotenv import load_dotenv
 from openai import OpenAI
 from datetime import datetime
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 import gspread
 from google.oauth2.service_account import Credentials
 from fastapi import FastAPI, Request
@@ -71,12 +71,10 @@ def log_to_google_sheet(question, response):
             if os.getenv("RENDER")
             else "service_account_rukbot.json"
         )
-
         creds = Credentials.from_service_account_file(
             creds_path,
             scopes=["https://www.googleapis.com/auth/spreadsheets"]
         )
-
         sheet = gspread.authorize(creds).open("RukBot Logs")
         worksheet = sheet.worksheet("Sheet1")
         worksheet.append_row([
@@ -121,8 +119,7 @@ You are RukBot — the casually brilliant AI trained on the RUKVEST and RUKSAK b
 🎯 Mission:
 Give clear, confident answers to help customers quickly.
 If uncertain, reply:
-🧠 “Great question! Let me check on that for you.”
-📩 “You can also reach our team at team@ruksak.com — they’ve got your back!”
+“I’m not 100% on that one — best to check with our team at team@ruksak.com — they’ve got your back!”
 
 🧠 Customer asked:
 "{user_message}"
@@ -139,7 +136,6 @@ def format_prompt(user_message):
     msg = user_message.lower()
     response_count += 1
 
-    # Determine product focus
     if "rukvest" in msg or "vest" in msg:
         relevant_docs = [
             knowledge_cache.get("RUKVEST_Product_Info.pdf", ""),
@@ -158,7 +154,6 @@ def format_prompt(user_message):
             knowledge_cache.get("RukBot FAQ.pdf", "")
         ]
     else:
-        # General fallback
         relevant_docs = [
             knowledge_cache.get("RukBot FAQ.pdf", ""),
             knowledge_cache.get("RUKBOT_Product_Comparison_Cheat_Sheet.pdf", "")
@@ -168,21 +163,22 @@ def format_prompt(user_message):
     return build_prompt(user_message, documents_text)
 
 # =====================================================
-# 9️⃣ RESPONSE GENERATION
+# 9️⃣ RESPONSE GENERATION — UPDATED VERSION
 # =====================================================
-def handle_unknown_question():
-    return (
-        "🧠 Great question! Let me check on that for you. "
-        "In the meantime, you can reach our team at 📩 team@ruksak.com — they’ve got your back!"
-    )
+def get_embedding(text):
+    try:
+        emb = client.embeddings.create(
+            model="text-embedding-3-small",
+            input=text
+        )
+        return np.array(emb.data[0].embedding)
+    except Exception as e:
+        print(f"⚠️ Embedding error: {e}")
+        return np.zeros(1536)
 
 def get_full_response(user_input):
-    # =====================================================
-    # 🛡️ STEP 1: Cross-Product Safeguard Rules
-    # =====================================================
     text = user_input.lower()
 
-    # Disallow mixed product combos (RUKVEST + RUKBRIK, etc.)
     invalid_pairs = [
         ("rukvest", "rukbrik"),
         ("rukbrik", "rukvest"),
@@ -191,28 +187,31 @@ def get_full_response(user_input):
     ]
     for a, b in invalid_pairs:
         if a in text and b in text:
-            print("⚠️ Cross-product combination detected — triggering fallback.")
-            return (
-                "That combo doesn’t sound right — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
-            )
+            print("⚠️ Cross-product combo detected — triggering fallback.")
+            return "That combo doesn’t sound right — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
 
-    # =====================================================
-    # 🧠 STEP 2: Strict FAQ-Only System Instruction
-    # =====================================================
+    prompt = format_prompt(user_input)
+    document_texts = prompt.split("📚 Relevant Knowledge:")[-1].strip()
+
+    user_emb = get_embedding(user_input)
+    doc_emb = get_embedding(document_texts)
+    similarity = cosine_similarity([user_emb], [doc_emb])[0][0]
+    print(f"🧭 Semantic match confidence: {similarity:.3f}")
+
+    if similarity < 0.75:
+        print("⚠️ Low semantic match — diverting to email fallback.")
+        return "I’m not 100% on that one — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
+
     strict_system_message = (
         "You are RukBot — the casually brilliant AI for RUKVEST & RUKSAK. "
-        "You must only answer using the verified FAQ and product information provided in the prompt. "
+        "You must only answer using the verified FAQ and product information provided. "
         "If you cannot confidently find the answer, always reply with:\n"
         "“I’m not 100% on that one — best to check with our team at team@ruksak.com — they’ve got your back!”\n\n"
-        "Maintain the RUKBOT brand tone: concise, confident, and kind. "
+        "Maintain RUKBOT brand tone: concise, confident, kind, and never robotic. "
         "Never open with greetings. Never mention 'documents' or 'sources'. "
-        "Use emojis only to support clarity or positivity."
+        "Use emojis sparingly to support clarity or positivity."
     )
 
-    # =====================================================
-    # 🎯 Build Prompt and Call OpenAI
-    # =====================================================
-    prompt = format_prompt(user_input)
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -220,44 +219,23 @@ def get_full_response(user_input):
                 {"role": "system", "content": strict_system_message},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.7,
+            temperature=0.5,
         )
 
-        # ✅ Safely extract the response content
-        full_text = (
-            response.choices[0].message.content.strip()
-            if hasattr(response.choices[0].message, "content")
-            else str(response.choices[0].message)
-        )
+        answer = response.choices[0].message.content.strip()
+        unsure_triggers = ["not sure", "unsure", "uncertain", "don’t know", "can't tell"]
+        if any(term in answer.lower() for term in unsure_triggers):
+            print("⚠️ Detected uncertainty phrase — fallback triggered.")
+            return "I’m not 100% on that one — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
 
-        # =====================================================
-        # 🔍 Confidence Fallback Detection
-        # =====================================================
-        low_confidence_terms = [
-            "not sure", "unsure", "can't tell", "uncertain", "i think", "unknown"
-        ]
-        if any(term in full_text.lower() for term in low_confidence_terms):
-            print("⚠️ Low confidence detected — diverting to email fallback.")
-            return (
-                "I’m not 100% on that one — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
-            )
+        if "team@ruksak.com" not in answer:
+            answer += " 📩 If you want to double-check, our team’s always happy to help at team@ruksak.com — they’ve got your back!"
 
-        # =====================================================
-        # 🧩 Ensure every unsure-style answer includes the contact line
-        # =====================================================
-        if "team@ruksak.com" not in full_text.lower() and (
-            "not sure" in full_text.lower() or "unsure" in full_text.lower()
-        ):
-            full_text += " 📩 You can check with our team at team@ruksak.com — they’ve got your back!"
-
-        return full_text
+        return answer
 
     except Exception as e:
         print(f"⚠️ OpenAI request failed: {e}")
-        return (
-            "Something went a bit sideways there — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
-        )
-
+        return "Something went a bit sideways there — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
 
 # =====================================================
 # 🔟 FASTAPI ROUTES
