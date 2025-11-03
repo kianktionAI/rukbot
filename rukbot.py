@@ -163,7 +163,7 @@ def format_prompt(user_message):
     return build_prompt(user_message, documents_text)
 
 # =====================================================
-# 9️⃣ RESPONSE GENERATION — UPDATED VERSION
+# 9️⃣ RESPONSE GENERATION
 # =====================================================
 def get_embedding(text):
     try:
@@ -238,7 +238,50 @@ def get_full_response(user_input):
         return "Something went a bit sideways there — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
 
 # =====================================================
-# 🔟 FASTAPI ROUTES
+# 🔟 KNOWLEDGE REFRESH ENDPOINT
+# =====================================================
+def chunk_text(text, chunk_size=800, overlap=100):
+    """Split text into overlapping chunks for better embedding recall."""
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        chunks.append(chunk)
+        start += chunk_size - overlap
+    return chunks
+
+@app.post("/refresh-knowledge")
+async def refresh_knowledge():
+    global knowledge_cache
+    try:
+        print("🔄 Refreshing RukBot Knowledge Base...")
+        print("📂 Loading and chunking files from Google Drive...")
+
+        raw_files = load_google_folder_files(GOOGLE_DRIVE_FOLDER_ID)
+        knowledge_chunks = []
+
+        for filename, content in raw_files.items():
+            if not content.strip():
+                continue
+            chunks = chunk_text(content)
+            for i, chunk in enumerate(chunks):
+                knowledge_chunks.append({
+                    "filename": filename,
+                    "chunk_index": i,
+                    "text": chunk
+                })
+
+        print(f"✅ Created {len(knowledge_chunks)} text chunks across {len(raw_files)} files.")
+        knowledge_cache = raw_files
+        return JSONResponse({"status": "success", "message": "Knowledge base refreshed successfully."})
+
+    except Exception as e:
+        print(f"❌ Error refreshing knowledge base: {e}")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+# =====================================================
+# 11️⃣ FASTAPI ROUTES
 # =====================================================
 @app.get("/check")
 async def check():
@@ -263,15 +306,3 @@ async def get_widget(request: Request):
     global response_count
     response_count = 0
     return templates.TemplateResponse("rukbot-widget.html", {"request": request})
-
-@app.post("/refresh-knowledge")
-async def refresh_knowledge():
-    global knowledge_cache
-    try:
-        print("🔄 Refreshing RukBot Knowledge Base...")
-        knowledge_cache = load_google_folder_files(GOOGLE_DRIVE_FOLDER_ID)
-        print("✅ Knowledge base refreshed successfully.")
-        return JSONResponse({"status": "success", "message": "Knowledge base refreshed successfully."})
-    except Exception as e:
-        print(f"❌ Error refreshing knowledge base: {e}")
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
