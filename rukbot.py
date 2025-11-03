@@ -1,10 +1,9 @@
 import os
+import math
 import fitz  # PyMuPDF
 from dotenv import load_dotenv
 from openai import OpenAI
 from datetime import datetime
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 import gspread
 from google.oauth2.service_account import Credentials
 from fastapi import FastAPI, Request
@@ -21,7 +20,9 @@ load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_PROJECT_ID = os.getenv("OPENAI_PROJECT_ID")
-GOOGLE_DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "12ZRNwCmVa3d2X5-rBQrbzq7f9aIDesiV")
+GOOGLE_DRIVE_FOLDER_ID = os.getenv(
+    "GOOGLE_DRIVE_FOLDER_ID", "12ZRNwCmVa3d2X5-rBQrbzq7f9aIDesiV"
+)
 
 print("🚀 Starting RukBot server...")
 print(f"🧩 Using Drive folder ID: {GOOGLE_DRIVE_FOLDER_ID}")
@@ -71,10 +72,12 @@ def log_to_google_sheet(question, response):
             if os.getenv("RENDER")
             else "service_account_rukbot.json"
         )
+
         creds = Credentials.from_service_account_file(
             creds_path,
             scopes=["https://www.googleapis.com/auth/spreadsheets"]
         )
+
         sheet = gspread.authorize(creds).open("RukBot Logs")
         worksheet = sheet.worksheet("Sheet1")
         worksheet.append_row([
@@ -136,6 +139,7 @@ def format_prompt(user_message):
     msg = user_message.lower()
     response_count += 1
 
+    # Pick which docs to feed based on what they asked about
     if "rukvest" in msg or "vest" in msg:
         relevant_docs = [
             knowledge_cache.get("RUKVEST_Product_Info.pdf", ""),
@@ -154,6 +158,7 @@ def format_prompt(user_message):
             knowledge_cache.get("RukBot FAQ.pdf", "")
         ]
     else:
+        # generic fallback
         relevant_docs = [
             knowledge_cache.get("RukBot FAQ.pdf", ""),
             knowledge_cache.get("RUKBOT_Product_Comparison_Cheat_Sheet.pdf", "")
@@ -163,7 +168,31 @@ def format_prompt(user_message):
     return build_prompt(user_message, documents_text)
 
 # =====================================================
-# 9️⃣ RESPONSE GENERATION
+# 9️⃣ COSINE SIMILARITY (pure Python, no numpy)
+# =====================================================
+def cosine_sim(vec1, vec2):
+    """
+    vec1, vec2 are lists of floats.
+    returns float between 0 and 1.
+    """
+    if not vec1 or not vec2:
+        return 0.0
+
+    # dot product
+    dot = 0.0
+    for a, b in zip(vec1, vec2):
+        dot += a * b
+
+    # magnitudes
+    mag1 = math.sqrt(sum(a * a for a in vec1))
+    mag2 = math.sqrt(sum(b * b for b in vec2))
+    if mag1 == 0 or mag2 == 0:
+        return 0.0
+
+    return dot / (mag1 * mag2)
+
+# =====================================================
+# 🔟 EMBEDDINGS (returns plain Python list)
 # =====================================================
 def get_embedding(text):
     try:
@@ -171,14 +200,20 @@ def get_embedding(text):
             model="text-embedding-3-small",
             input=text
         )
-        return np.array(emb.data[0].embedding)
+        # OpenAI returns a list of floats already
+        return emb.data[0].embedding
     except Exception as e:
         print(f"⚠️ Embedding error: {e}")
-        return np.zeros(1536)
+        # fallback: zero vector same length as model output (1536 dims)
+        return [0.0] * 1536
 
+# =====================================================
+# 1️⃣1️⃣ MAIN RESPONSE GENERATION
+# =====================================================
 def get_full_response(user_input):
     text = user_input.lower()
 
+    # ❌ Disallow nonsense cross-product combos
     invalid_pairs = [
         ("rukvest", "rukbrik"),
         ("rukbrik", "rukvest"),
@@ -188,31 +223,48 @@ def get_full_response(user_input):
     for a, b in invalid_pairs:
         if a in text and b in text:
             print("⚠️ Cross-product combo detected — triggering fallback.")
-            return "That combo doesn’t sound right — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
+            return (
+                "That combo doesn’t sound right — best to check with our team at 📩 "
+                "team@ruksak.com — they’ve got your back!"
+            )
 
+    # Build the prompt we'll feed to the model
     prompt = format_prompt(user_input)
-    document_texts = prompt.split("📚 Relevant Knowledge:")[-1].strip()
 
+    # Pull just the knowledge part from that prompt
+    # so we can judge how relevant it is
+    if "📚 Relevant Knowledge:" in prompt:
+        document_texts = prompt.split("📚 Relevant Knowledge:")[-1].strip()
+    else:
+        document_texts = ""
+
+    # --- semantic confidence gate ---
     user_emb = get_embedding(user_input)
     doc_emb = get_embedding(document_texts)
-    similarity = cosine_similarity([user_emb], [doc_emb])[0][0]
+    similarity = cosine_sim(user_emb, doc_emb)
     print(f"🧭 Semantic match confidence: {similarity:.3f}")
 
     if similarity < 0.75:
         print("⚠️ Low semantic match — diverting to email fallback.")
-        return "I’m not 100% on that one — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
+        return (
+            "I’m not 100% on that one — best to check with our team at 📩 "
+            "team@ruksak.com — they’ve got your back!"
+        )
 
+    # --- system message (tone & safety) ---
     strict_system_message = (
         "You are RukBot — the casually brilliant AI for RUKVEST & RUKSAK. "
         "You must only answer using the verified FAQ and product information provided. "
         "If you cannot confidently find the answer, always reply with:\n"
-        "“I’m not 100% on that one — best to check with our team at team@ruksak.com — they’ve got your back!”\n\n"
+        "“I’m not 100% on that one — best to check with our team at team@ruksak.com "
+        "— they’ve got your back!”\n\n"
         "Maintain RUKBOT brand tone: concise, confident, kind, and never robotic. "
         "Never open with greetings. Never mention 'documents' or 'sources'. "
         "Use emojis sparingly to support clarity or positivity."
     )
 
     try:
+        # Ask OpenAI for the actual answer
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -223,65 +275,41 @@ def get_full_response(user_input):
         )
 
         answer = response.choices[0].message.content.strip()
-        unsure_triggers = ["not sure", "unsure", "uncertain", "don’t know", "can't tell"]
+
+        # If the model itself sounds unsure, force fallback
+        unsure_triggers = [
+            "not sure",
+            "unsure",
+            "uncertain",
+            "don’t know",
+            "don't know",
+            "can't tell",
+        ]
         if any(term in answer.lower() for term in unsure_triggers):
             print("⚠️ Detected uncertainty phrase — fallback triggered.")
-            return "I’m not 100% on that one — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
+            return (
+                "I’m not 100% on that one — best to check with our team at 📩 "
+                "team@ruksak.com — they’ve got your back!"
+            )
 
-        if "team@ruksak.com" not in answer:
-            answer += " 📩 If you want to double-check, our team’s always happy to help at team@ruksak.com — they’ve got your back!"
+        # Make sure we *always* give a contact path in the final answer
+        if "team@ruksak.com" not in answer.lower():
+            answer += (
+                " 📩 If you want to double-check, our team’s always happy to help "
+                "at team@ruksak.com — they’ve got your back!"
+            )
 
         return answer
 
     except Exception as e:
         print(f"⚠️ OpenAI request failed: {e}")
-        return "Something went a bit sideways there — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
+        return (
+            "Something went a bit sideways there — best to check with our team at "
+            "📩 team@ruksak.com — they’ve got your back!"
+        )
 
 # =====================================================
-# 🔟 KNOWLEDGE REFRESH ENDPOINT
-# =====================================================
-def chunk_text(text, chunk_size=800, overlap=100):
-    """Split text into overlapping chunks for better embedding recall."""
-    chunks = []
-    start = 0
-    while start < len(text):
-        end = start + chunk_size
-        chunk = text[start:end]
-        chunks.append(chunk)
-        start += chunk_size - overlap
-    return chunks
-
-@app.post("/refresh-knowledge")
-async def refresh_knowledge():
-    global knowledge_cache
-    try:
-        print("🔄 Refreshing RukBot Knowledge Base...")
-        print("📂 Loading and chunking files from Google Drive...")
-
-        raw_files = load_google_folder_files(GOOGLE_DRIVE_FOLDER_ID)
-        knowledge_chunks = []
-
-        for filename, content in raw_files.items():
-            if not content.strip():
-                continue
-            chunks = chunk_text(content)
-            for i, chunk in enumerate(chunks):
-                knowledge_chunks.append({
-                    "filename": filename,
-                    "chunk_index": i,
-                    "text": chunk
-                })
-
-        print(f"✅ Created {len(knowledge_chunks)} text chunks across {len(raw_files)} files.")
-        knowledge_cache = raw_files
-        return JSONResponse({"status": "success", "message": "Knowledge base refreshed successfully."})
-
-    except Exception as e:
-        print(f"❌ Error refreshing knowledge base: {e}")
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
-
-# =====================================================
-# 11️⃣ FASTAPI ROUTES
+# 1️⃣2️⃣ FASTAPI ROUTES
 # =====================================================
 @app.get("/check")
 async def check():
@@ -306,3 +334,20 @@ async def get_widget(request: Request):
     global response_count
     response_count = 0
     return templates.TemplateResponse("rukbot-widget.html", {"request": request})
+
+@app.post("/refresh-knowledge")
+async def refresh_knowledge():
+    global knowledge_cache
+    try:
+        print("🔄 Refreshing RukBot Knowledge Base...")
+        knowledge_cache = load_google_folder_files(GOOGLE_DRIVE_FOLDER_ID)
+        print("✅ Knowledge base refreshed successfully.")
+        return JSONResponse(
+            {"status": "success", "message": "Knowledge base refreshed successfully."}
+        )
+    except Exception as e:
+        print(f"❌ Error refreshing knowledge base: {e}")
+        return JSONResponse(
+            {"status": "error", "message": str(e)},
+            status_code=500
+        )
