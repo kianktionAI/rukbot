@@ -14,6 +14,7 @@ if os.getenv("RENDER"):
 else:
     SERVICE_ACCOUNT_FILE = "service_account_rukbot.json"
 
+
 def load_google_folder_files(folder_id):
     """
     Returns a dict: {filename: extracted_text}
@@ -59,3 +60,40 @@ def load_google_folder_files(folder_id):
 
     print(f"✅ Loaded {len(file_contents)} files from Google Drive.")
     return file_contents
+
+
+# --------------------------
+# 🔹 NEW SECTION: Search Helpers
+# --------------------------
+
+def chunk_text(text, max_chunk_size=1000, overlap=100):
+    """Split text into overlapping chunks for better retrieval."""
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + max_chunk_size
+        chunks.append(text[start:end])
+        start += max_chunk_size - overlap
+    return chunks
+
+
+def search_drive_for_answer(query, folder_id):
+    """Searches Drive files for a matching chunk of text related to the query."""
+    print(f"🔍 Searching Drive for query: {query}")
+    files = load_google_folder_files(folder_id)
+
+    relevant_chunks = []
+
+    for file_name, text in files.items():
+        chunks = chunk_text(text)
+        for chunk in chunks:
+            if query.lower() in chunk.lower():
+                relevant_chunks.append(f"📄 {file_name}:\n{chunk.strip()}")
+
+    if relevant_chunks:
+        print(f"✅ Found {len(relevant_chunks)} matching chunks.")
+        # Return the most relevant snippet (first match for now)
+        return relevant_chunks[0][:1500]
+    else:
+        print("⚠️ No relevant information found.")
+        return None
