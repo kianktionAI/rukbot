@@ -244,8 +244,11 @@ def get_full_response(user_input):
     print(f"🧭 Best semantic match: {best_score:.3f}")
 
     if best_score < MIN_SIMILARITY:
-        print("⚠️ Low semantic match — cautious fallback.")
-        return "I’m not 100% on that one — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
+    print("⚠️ Low semantic match — using forced contextual response.")
+    context = [c for _, c in top]
+    prompt = build_prompt(user_input, context)
+    # then continue as normal instead of returning early
+
 
     context = [c for _, c in top]
     prompt = build_prompt(user_input, context)
