@@ -1,5 +1,6 @@
 import os
 import math
+import heapq
 import fitz  # PyMuPDF
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -11,6 +12,7 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+
 from drive_utils import load_google_folder_files
 
 # =====================================================
@@ -26,6 +28,12 @@ GOOGLE_DRIVE_FOLDER_ID = os.getenv(
 
 print("🚀 Starting RukBot server...")
 print(f"🧩 Using Drive folder ID: {GOOGLE_DRIVE_FOLDER_ID}")
+
+# Retrieval tuning (safe defaults)
+CHUNK_SIZE = 800
+CHUNK_OVERLAP = 120
+TOP_K = 6
+MIN_SIMILARITY = 0.58  # lower = less rigid, higher = more cautious
 
 # =====================================================
 # 2️⃣ FASTAPI APP CONFIGURATION
@@ -44,23 +52,86 @@ templates = Jinja2Templates(directory="templates")
 # =====================================================
 # 3️⃣ OPENAI CLIENT SETUP
 # =====================================================
-client = OpenAI(
-    api_key=OPENAI_API_KEY,
-    project=OPENAI_PROJECT_ID
-)
+client = OpenAI(api_key=OPENAI_API_KEY, project=OPENAI_PROJECT_ID)
 
 # =====================================================
-# 4️⃣ KNOWLEDGE BASE INITIALIZATION
+# 4️⃣ KNOWLEDGE BASE: LOAD + CHUNK + EMBED
 # =====================================================
-print("📂 Loading knowledge base from Google Drive...")
+def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP):
+    chunks, start = [], 0
+    n = len(text)
+    step = max(1, size - overlap)
+    while start < n:
+        end = min(n, start + size)
+        chunks.append(text[start:end])
+        start += step
+    return chunks
+
+
+def cosine_similarity(a, b):
+    # a and b are Python lists of floats
+    dot = 0.0
+    na = 0.0
+    nb = 0.0
+    for xa, xb in zip(a, b):
+        dot += xa * xb
+        na += xa * xa
+        nb += xb * xb
+    if na == 0.0 or nb == 0.0:
+        return 0.0
+    return dot / (math.sqrt(na) * math.sqrt(nb))
+
+
+def get_embedding_vec(text: str):
+    try:
+        resp = client.embeddings.create(model="text-embedding-3-small", input=text)
+        # returns list[float]
+        return resp.data[0].embedding
+    except Exception as e:
+        print(f"⚠️ Embedding error: {e}")
+        return []
+
+
+def build_knowledge_index(file_dict):
+    """
+    Returns:
+      {
+        "chunks": [{"filename":..., "chunk_index":..., "text":..., "embedding":[...]}],
+      }
+    """
+    index = {"chunks": []}
+    total_chunks = 0
+
+    for filename, content in file_dict.items():
+        if not content or not content.strip():
+            continue
+        parts = chunk_text(content)
+        for i, part in enumerate(parts):
+            emb = get_embedding_vec(part)
+            index["chunks"].append(
+                {
+                    "filename": filename,
+                    "chunk_index": i,
+                    "text": part,
+                    "embedding": emb,
+                }
+            )
+            total_chunks += 1
+
+    print(f"✅ Knowledge index built: {len(file_dict)} files → {total_chunks} chunks.")
+    return index
+
+
+print("📂 Loading raw knowledge from Google Drive...")
 try:
-    knowledge_cache = load_google_folder_files(GOOGLE_DRIVE_FOLDER_ID)
-    print(f"✅ Loaded {len(knowledge_cache)} files from knowledge base.")
+    knowledge_files = load_google_folder_files(GOOGLE_DRIVE_FOLDER_ID)
+    knowledge_index = build_knowledge_index(knowledge_files)
 except Exception as e:
-    print(f"❌ Error loading knowledge base: {e}")
-    knowledge_cache = {}
+    print(f"❌ Error preparing knowledge base: {e}")
+    knowledge_files = {}
+    knowledge_index = {"chunks": []}
 
-response_count = 0  # tracks first vs follow-up
+response_count = 0  # tracks first vs follow-up (if you want to use it later)
 
 # =====================================================
 # 5️⃣ GOOGLE SHEET LOGGING
@@ -72,24 +143,19 @@ def log_to_google_sheet(question, response):
             if os.getenv("RENDER")
             else "service_account_rukbot.json"
         )
-
         creds = Credentials.from_service_account_file(
-            creds_path,
-            scopes=["https://www.googleapis.com/auth/spreadsheets"]
+            creds_path, scopes=["https://www.googleapis.com/auth/spreadsheets"]
         )
-
         sheet = gspread.authorize(creds).open("RukBot Logs")
         worksheet = sheet.worksheet("Sheet1")
-        worksheet.append_row([
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            question,
-            response
-        ])
+        worksheet.append_row(
+            [datetime.now().strftime("%Y-%m-%d %H:%M:%S"), question, response]
+        )
     except Exception as e:
         print(f"⚠️ Logging to Google Sheet failed: {e}")
 
 # =====================================================
-# 6️⃣ PDF EXTRACTION UTILITY
+# 6️⃣ (Optional) PDF extraction utility
 # =====================================================
 def extract_text_from_pdf(filename):
     text = ""
@@ -102,9 +168,70 @@ def extract_text_from_pdf(filename):
     return text
 
 # =====================================================
-# 7️⃣ PROMPT GENERATION
+# 7️⃣ RETRIEVAL
 # =====================================================
-def build_prompt(user_message, documents_text):
+PRODUCT_HINTS = {
+    "rukvest": ["RUKVEST", "RUKVEST_Product_Info.pdf"],
+    "vest": ["RUKVEST", "RUKVEST_Product_Info.pdf"],
+    "ruksak": ["RUKSAK", "RUKSAK_Product_Info.pdf"],
+    "bag": ["RUKSAK", "RUKSAK_Product_Info.pdf"],
+    "rucksack": ["RUKSAK", "RUKSAK_Product_Info.pdf"],
+    "rukbrik": ["RUKBRIK", "RUKBRIK_Product_Info.pdf"],
+    "brick": ["RUKBRIK", "RUKBRIK_Product_Info.pdf"],
+}
+
+
+def candidate_chunks(user_text: str):
+    """
+    Light filter: if the query contains product words,
+    prefer chunks whose filename matches those hints.
+    Falls back to all chunks if no candidates found.
+    """
+    msg = user_text.lower()
+    preferred_files = set()
+    for key, hints in PRODUCT_HINTS.items():
+        if key in msg:
+            for h in hints:
+                preferred_files.add(h)
+
+    if not preferred_files:
+        return knowledge_index["chunks"]
+
+    filtered = [
+        c
+        for c in knowledge_index["chunks"]
+        if any(h.lower() in c["filename"].lower() or h.lower() in c["text"].lower() for h in preferred_files)
+    ]
+    return filtered if filtered else knowledge_index["chunks"]
+
+
+def retrieve(user_text: str, top_k: int = TOP_K):
+    """
+    Embed user text, score against candidate chunks, return top_k with scores.
+    """
+    q_emb = get_embedding_vec(user_text)
+    if not q_emb:
+        return []
+
+    cands = candidate_chunks(user_text)
+    scored = []
+    for c in cands:
+        emb = c.get("embedding", [])
+        if not emb:
+            continue
+        sim = cosine_similarity(q_emb, emb)
+        scored.append((sim, c))
+
+    top = heapq.nlargest(top_k, scored, key=lambda x: x[0])
+    return top  # list of (score, chunk)
+
+# =====================================================
+# 8️⃣ PROMPT GENERATION
+# =====================================================
+def build_prompt(user_message, context_snippets):
+    joined = "\n\n---\n".join(
+        [f"[{c['filename']} #{c['chunk_index']}] {c['text']}" for c in context_snippets]
+    )
     return f"""
 You are RukBot — the casually brilliant AI trained on the RUKVEST and RUKSAK brand.
 
@@ -121,99 +248,23 @@ You are RukBot — the casually brilliant AI trained on the RUKVEST and RUKSAK b
 
 🎯 Mission:
 Give clear, confident answers to help customers quickly.
-If uncertain, reply:
+If uncertain, reply exactly with:
 “I’m not 100% on that one — best to check with our team at team@ruksak.com — they’ve got your back!”
 
 🧠 Customer asked:
 "{user_message}"
 
-📚 Relevant Knowledge:
-"{documents_text[:12000]}"
+📚 Relevant Knowledge (internal notes):
+{joined[:12000]}
 """
 
 # =====================================================
-# 8️⃣ TARGETED KNOWLEDGE RETRIEVAL
-# =====================================================
-def format_prompt(user_message):
-    global response_count
-    msg = user_message.lower()
-    response_count += 1
-
-    # Pick which docs to feed based on what they asked about
-    if "rukvest" in msg or "vest" in msg:
-        relevant_docs = [
-            knowledge_cache.get("RUKVEST_Product_Info.pdf", ""),
-            knowledge_cache.get("RukBot FAQ.pdf", ""),
-            knowledge_cache.get("RUKBOT_Product_Comparison_Cheat_Sheet.pdf", "")
-        ]
-    elif "ruksak" in msg or "rucksack" in msg or "bag" in msg:
-        relevant_docs = [
-            knowledge_cache.get("RUKSAK_Product_Info.pdf", ""),
-            knowledge_cache.get("RukBot FAQ.pdf", ""),
-            knowledge_cache.get("RUKBOT_Product_Comparison_Cheat_Sheet.pdf", "")
-        ]
-    elif "rukbrik" in msg or "brick" in msg:
-        relevant_docs = [
-            knowledge_cache.get("RUKBRIK_Product_Info.pdf", ""),
-            knowledge_cache.get("RukBot FAQ.pdf", "")
-        ]
-    else:
-        # generic fallback
-        relevant_docs = [
-            knowledge_cache.get("RukBot FAQ.pdf", ""),
-            knowledge_cache.get("RUKBOT_Product_Comparison_Cheat_Sheet.pdf", "")
-        ]
-
-    documents_text = "\n\n".join([doc for doc in relevant_docs if doc])
-    return build_prompt(user_message, documents_text)
-
-# =====================================================
-# 9️⃣ COSINE SIMILARITY (pure Python, no numpy)
-# =====================================================
-def cosine_sim(vec1, vec2):
-    """
-    vec1, vec2 are lists of floats.
-    returns float between 0 and 1.
-    """
-    if not vec1 or not vec2:
-        return 0.0
-
-    # dot product
-    dot = 0.0
-    for a, b in zip(vec1, vec2):
-        dot += a * b
-
-    # magnitudes
-    mag1 = math.sqrt(sum(a * a for a in vec1))
-    mag2 = math.sqrt(sum(b * b for b in vec2))
-    if mag1 == 0 or mag2 == 0:
-        return 0.0
-
-    return dot / (mag1 * mag2)
-
-# =====================================================
-# 🔟 EMBEDDINGS (returns plain Python list)
-# =====================================================
-def get_embedding(text):
-    try:
-        emb = client.embeddings.create(
-            model="text-embedding-3-small",
-            input=text
-        )
-        # OpenAI returns a list of floats already
-        return emb.data[0].embedding
-    except Exception as e:
-        print(f"⚠️ Embedding error: {e}")
-        # fallback: zero vector same length as model output (1536 dims)
-        return [0.0] * 1536
-
-# =====================================================
-# 1️⃣1️⃣ MAIN RESPONSE GENERATION
+# 9️⃣ RESPONSE GENERATION
 # =====================================================
 def get_full_response(user_input):
     text = user_input.lower()
 
-    # ❌ Disallow nonsense cross-product combos
+    # Disallow mixed product combos (RUKVEST + RUKBRIK, etc.)
     invalid_pairs = [
         ("rukvest", "rukbrik"),
         ("rukbrik", "rukvest"),
@@ -224,92 +275,77 @@ def get_full_response(user_input):
         if a in text and b in text:
             print("⚠️ Cross-product combo detected — triggering fallback.")
             return (
-                "That combo doesn’t sound right — best to check with our team at 📩 "
-                "team@ruksak.com — they’ve got your back!"
+                "That combo doesn’t sound right — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
             )
 
-    # Build the prompt we'll feed to the model
-    prompt = format_prompt(user_input)
-
-    # Pull just the knowledge part from that prompt
-    # so we can judge how relevant it is
-    if "📚 Relevant Knowledge:" in prompt:
-        document_texts = prompt.split("📚 Relevant Knowledge:")[-1].strip()
-    else:
-        document_texts = ""
-
-    # --- semantic confidence gate ---
-    user_emb = get_embedding(user_input)
-    doc_emb = get_embedding(document_texts)
-    similarity = cosine_sim(user_emb, doc_emb)
-    print(f"🧭 Semantic match confidence: {similarity:.3f}")
-
-    if similarity < 0.75:
-        print("⚠️ Low semantic match — diverting to email fallback.")
+    # Retrieve top chunks
+    top = retrieve(user_input, TOP_K)
+    if not top:
+        print("⚠️ Retrieval returned no results — fallback.")
         return (
-            "I’m not 100% on that one — best to check with our team at 📩 "
-            "team@ruksak.com — they’ve got your back!"
+            "I’m not 100% on that one — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
         )
 
-    # --- system message (tone & safety) ---
+    top_scores = [s for s, _ in top]
+    best_score = top_scores[0] if top_scores else 0.0
+    print(f"🧭 Best semantic match: {best_score:.3f}")
+
+    # If even the best match is weak, be cautious
+    if best_score < MIN_SIMILARITY:
+        print("⚠️ Low semantic match — cautious fallback.")
+        return (
+            "I’m not 100% on that one — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
+        )
+
+    # Build prompt with the chunks only (no file/source mention in output)
+    context = [c for _, c in top]
+    prompt = build_prompt(user_input, context)
+
     strict_system_message = (
         "You are RukBot — the casually brilliant AI for RUKVEST & RUKSAK. "
-        "You must only answer using the verified FAQ and product information provided. "
-        "If you cannot confidently find the answer, always reply with:\n"
-        "“I’m not 100% on that one — best to check with our team at team@ruksak.com "
-        "— they’ve got your back!”\n\n"
-        "Maintain RUKBOT brand tone: concise, confident, kind, and never robotic. "
+        "Only answer using the information provided in the prompt's knowledge section. "
+        "If you cannot confidently find the answer, you MUST reply exactly with:\n"
+        "“I’m not 100% on that one — best to check with our team at team@ruksak.com — they’ve got your back!”\n\n"
+        "Tone: concise, confident, kind. "
         "Never open with greetings. Never mention 'documents' or 'sources'. "
-        "Use emojis sparingly to support clarity or positivity."
+        "Use emojis only when it improves clarity."
     )
 
     try:
-        # Ask OpenAI for the actual answer
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": strict_system_message},
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.5,
+            temperature=0.4,
         )
-
         answer = response.choices[0].message.content.strip()
 
-        # If the model itself sounds unsure, force fallback
-        unsure_triggers = [
-            "not sure",
-            "unsure",
-            "uncertain",
-            "don’t know",
-            "don't know",
-            "can't tell",
-        ]
+        # Safety: ensure fallback phrasing if the model hedges
+        unsure_triggers = ["not sure", "unsure", "uncertain", "don’t know", "can't tell"]
         if any(term in answer.lower() for term in unsure_triggers):
             print("⚠️ Detected uncertainty phrase — fallback triggered.")
             return (
-                "I’m not 100% on that one — best to check with our team at 📩 "
-                "team@ruksak.com — they’ve got your back!"
+                "I’m not 100% on that one — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
             )
 
-        # Make sure we *always* give a contact path in the final answer
-        if "team@ruksak.com" not in answer.lower():
-            answer += (
-                " 📩 If you want to double-check, our team’s always happy to help "
-                "at team@ruksak.com — they’ve got your back!"
-            )
+        # Add contact line if needed when it's an advisory answer
+        if "team@ruksak.com" not in answer.lower() and any(
+            k in user_input.lower() for k in ["contact", "help", "support", "email"]
+        ):
+            answer += " 📩 If you want to double-check, our team’s always happy to help at team@ruksak.com — they’ve got your back!"
 
         return answer
 
     except Exception as e:
         print(f"⚠️ OpenAI request failed: {e}")
         return (
-            "Something went a bit sideways there — best to check with our team at "
-            "📩 team@ruksak.com — they’ve got your back!"
+            "Something went a bit sideways there — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
         )
 
 # =====================================================
-# 1️⃣2️⃣ FASTAPI ROUTES
+# 🔟 FASTAPI ROUTES
 # =====================================================
 @app.get("/check")
 async def check():
@@ -337,17 +373,18 @@ async def get_widget(request: Request):
 
 @app.post("/refresh-knowledge")
 async def refresh_knowledge():
-    global knowledge_cache
+    """
+    Pull latest Drive files, rebuild chunks+embeddings in-memory.
+    """
+    global knowledge_files, knowledge_index
     try:
         print("🔄 Refreshing RukBot Knowledge Base...")
-        knowledge_cache = load_google_folder_files(GOOGLE_DRIVE_FOLDER_ID)
+        knowledge_files = load_google_folder_files(GOOGLE_DRIVE_FOLDER_ID)
+        knowledge_index = build_knowledge_index(knowledge_files)
         print("✅ Knowledge base refreshed successfully.")
         return JSONResponse(
             {"status": "success", "message": "Knowledge base refreshed successfully."}
         )
     except Exception as e:
         print(f"❌ Error refreshing knowledge base: {e}")
-        return JSONResponse(
-            {"status": "error", "message": str(e)},
-            status_code=500
-        )
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
