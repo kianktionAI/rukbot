@@ -30,7 +30,7 @@ print(f"🧩 Using Drive folder ID: {GOOGLE_DRIVE_FOLDER_ID}")
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 120
 TOP_K = 6
-MIN_SIMILARITY = 0.58
+MIN_SIMILARITY = 0.20
 
 # =====================================================
 # 2️⃣ FASTAPI APP CONFIGURATION
