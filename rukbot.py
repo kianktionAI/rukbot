@@ -228,13 +228,11 @@ def get_full_response(user_input):
             print("⚠️ Cross-product combo detected — triggering fallback.")
             return "That combo doesn’t sound right — best to check with our team at 📩 team@ruksak.com — they’ve got your back!"
 
-    # 🔎 Step 1: Direct Drive text search
     literal_match = search_drive_for_answer(user_input, GOOGLE_DRIVE_FOLDER_ID)
     if literal_match:
         print("✅ Found direct text match from Drive chunk search.")
         return literal_match
 
-    # 🔍 Step 2: Semantic retrieval
     top = retrieve(user_input, TOP_K)
     if not top:
         print("⚠️ Retrieval returned no results — fallback.")
@@ -244,14 +242,12 @@ def get_full_response(user_input):
     print(f"🧭 Best semantic match: {best_score:.3f}")
 
     if best_score < MIN_SIMILARITY:
-    print("⚠️ Low semantic match — using forced contextual response.")
-    context = [c for _, c in top]
-    prompt = build_prompt(user_input, context)
-    # then continue as normal instead of returning early
-
-
-    context = [c for _, c in top]
-    prompt = build_prompt(user_input, context)
+        print("⚠️ Low semantic match — using forced contextual response.")
+        context = [c for _, c in top]
+        prompt = build_prompt(user_input, context)
+    else:
+        context = [c for _, c in top]
+        prompt = build_prompt(user_input, context)
 
     system_message = (
         "You are RukBot — the casually brilliant AI for RUKVEST & RUKSAK. "
