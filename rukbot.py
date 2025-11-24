@@ -1,4 +1,5 @@
 print("🔥 LOADED NEW RUKBOT.PY")
+
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -115,10 +116,16 @@ def get_full_response(user_input):
             temperature=0.7
         )
 
-        # Extract the assistant text output
-        answer = response.output_text
+        # =====================================================
+        # CORRECT RAG OUTPUT EXTRACTION (THIS WAS THE PROBLEM)
+        # =====================================================
+        try:
+            answer = response.output[0].content[0].text
+        except Exception:
+            answer = None
 
-        if not answer:
+        # Fallback ONLY if answer is totally empty
+        if not answer or not answer.strip():
             return (
                 "🧠 Great question! Let me check on that for you. "
                 "You can also email team@ruksak.com — they’ve got your back!"
