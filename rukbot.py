@@ -1,31 +1,27 @@
-print("🔥 LOADED CLEAN RUKBOT.PY (Google-free)")
+print("🔥 LOADED CLEAN RUKBOT.PY (STABLE VERSION)")
 
 import os
-from datetime import datetime
-
 from dotenv import load_dotenv
 from openai import OpenAI
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 
 # =====================================================
-# 1️⃣ LOAD ENVIRONMENT
+# 1️⃣ LOAD ENV
 # =====================================================
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_PROJECT_ID = os.getenv("OPENAI_PROJECT_ID")
 
-print("🚀 Starting RukBot server...")
-print(f"🧠 Project ID: {OPENAI_PROJECT_ID}")
 
 # =====================================================
-# 2️⃣ FASTAPI APP
+# 2️⃣ FASTAPI SETUP
 # =====================================================
 app = FastAPI()
 
@@ -52,41 +48,45 @@ client = OpenAI(
 
 
 # =====================================================
-# 4️⃣ RESPONSE GENERATION
+# 4️⃣ RESPONSE GENERATION (STABLE)
 # =====================================================
 def get_full_response(user_input: str) -> str:
     try:
         response = client.responses.create(
             model="gpt-4.1-mini",
-            input=(
-                "You are RukBot — the friendly, confident product expert "
-                "for RUKSAK & RUKVEST.\n\n"
+            input=f"""
+You are RukBot — the friendly, confident, casually smart expert for RUKSAK & RUKVEST.
 
-                "Use ONLY information found in the official product PDFs.\n"
-                "If unsure, say: 'I can’t find this in the official product specs — "
-                "try the team at team@ruksak.com.'\n\n"
+VOICE:
+- Warm, helpful, conversational.
+- Sound human, not robotic.
+- Short sentences. Clear, friendly tone.
 
-                "RUKVEST RULES:\n"
-                "- Fixed weight: 3kg, 5kg, 8kg, 11kg.\n"
-                "- Not adjustable — no removable plates.\n\n"
+PRODUCT RULES:
+- RUKVEST is fixed-weight only: 3kg, 5kg, 8kg, 11kg. Never adjustable.
+- Never invent features that aren’t in the PDFs.
+- If the PDFs don’t mention something, reply:
+  "I can’t find this in the official product specs — the team at team@ruksak.com can help with specifics."
 
-                f"User question: {user_input}"
-            ),
+STYLE:
+- No mention of PDFs, vector stores, or internal logic.
+- Just answer naturally.
+
+USER QUESTION: {user_input}
+            """,
             temperature=0.4,
         )
 
-        answer = getattr(response, "output_text", None)
-        if isinstance(answer, str) and answer.strip():
-            return answer.strip()
+        # Only return plain text — nothing else.
+        answer = getattr(response, "output_text", "").strip()
+        if answer:
+            return answer
 
-        return "🧠 I reached OpenAI but didn't get a clear answer back."
+        return "🧠 Hmm, I didn’t quite catch that — try asking in a slightly different way?"
 
     except Exception as e:
-        print(f"⚠️ Model error: {e}")
-        return (
-            "🧠 I'm having trouble reaching my brain right now (the OpenAI API). "
-            "If this keeps happening, the RUKSAK team can check the backend."
-        )
+        print("❌ OpenAI error:", e)
+        return "⚠️ I’m having trouble reaching my brain (OpenAI). Try again shortly."
 
 
 # =====================================================
@@ -108,11 +108,10 @@ async def chat(request: Request):
     user_input = data.get("message", "")
     reply = get_full_response(user_input)
 
-    # ⭐ RETURN JSON FOR WIDGET ⭐
-    return JSONResponse({"response": reply})
+    # CRITICAL: Widget and main site expect PLAIN TEXT
+    return PlainTextResponse(reply)
 
 
 @app.get("/widget", response_class=HTMLResponse)
 async def widget(request: Request):
     return templates.TemplateResponse("rukbot-widget.html", {"request": request})
-
