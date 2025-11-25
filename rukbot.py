@@ -35,42 +35,40 @@ if not OPENAI_PROJECT_ID:
 # =====================================================
 app = FastAPI()
 
-# Single static mount – serving JS/CSS from /static
+# Serve JS/CSS from /static
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# ✅ FIXED CORS MIDDLEWARE (Render-compatible)
 app.add_middleware(
-    CORSMiddleware(
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    CORSMiddleware,
+    allow_origins=["*"],  
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 templates = Jinja2Templates(directory="templates")
 
 
 # =====================================================
-# 3️⃣ OPENAI CLIENT (BASIC RESPONSES API – NO RAG YET)
+# 3️⃣ OPENAI CLIENT (BASE RESPONSES API)
 # =====================================================
 client = OpenAI(
     api_key=OPENAI_API_KEY,
     project=OPENAI_PROJECT_ID,
 )
 
-# Placeholder for when we re-enable file_search later
+# Keeping this for when we re-enable file_search later
 VECTOR_STORE_ID = "vs_6924e48702ac81918030c4ebabe8efb9"
 
 
 # =====================================================
-# 4️⃣ CORE RESPONSE GENERATION – SIMPLE TEST FIRST
+# 4️⃣ CORE RESPONSE GENERATION
 # =====================================================
 def get_full_response(user_input: str) -> str:
     """
-    First goal: PROVE the OpenAI Responses API call works.
-
-    This version does NOT use file_search yet.
-    Once this returns a good answer, we can safely add RAG back on top.
+    Clean single-call pipeline using the OpenAI Responses API.
+    RAG/file_search will be added after production stabilises.
     """
     try:
         response = client.responses.create(
@@ -92,7 +90,7 @@ def get_full_response(user_input: str) -> str:
 
                 "RUKVEST RULES:\n"
                 "• The RUKVEST is a fixed-weight vest.\n"
-                "• It comes in 3kg, 5kg, 8kg, and 11kg options (from official product specs).\n"
+                "• It comes in 3kg, 5kg, 8kg, and 11kg options.\n"
                 "• It is NOT adjustable.\n"
                 "• No weights can be added or removed.\n"
                 "• Never imply plates, inserts, or expandable weight systems.\n\n"
@@ -110,13 +108,11 @@ def get_full_response(user_input: str) -> str:
         print(response)
         print("=====================================================\n")
 
-        # Extract text safely
         answer = getattr(response, "output_text", None)
 
         if isinstance(answer, str) and answer.strip():
             return answer.strip()
 
-        # If the API returned but no text was present
         return (
             "🧠 I reached OpenAI but didn't get a clear answer back. "
             "Try rephrasing that for me, or give me a bit more detail."
