@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,7 +37,7 @@ app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Correct Render-compatible CORS
+# Render-compatible CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -155,7 +155,9 @@ async def chat(request: Request):
     data = await request.json()
     user_input = data.get("message", "")
     reply = get_full_response(user_input)
-    return JSONResponse({"response": reply})
+
+    # ⭐ FIXED: Return plain text instead of JSON wrapper
+    return PlainTextResponse(reply)
 
 
 @app.get("/widget", response_class=HTMLResponse)
