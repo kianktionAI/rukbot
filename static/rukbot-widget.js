@@ -10,11 +10,18 @@ async function sendMessage(e) {
   userDiv.textContent = message;
   chat.appendChild(userDiv);
 
-  const res = await fetch("/ask", {
+  const API_URL =
+    window.location.hostname.includes("localhost") ||
+    window.location.hostname.includes("127.0.0.1")
+        ? "http://127.0.0.1:8000/chat"
+        : "https://rukbot-backend.onrender.com/chat";
+
+  const res = await fetch(API_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message })
   });
+  
   const data = await res.json();
 
   const botDiv = document.createElement("div");
