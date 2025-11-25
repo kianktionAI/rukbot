@@ -40,7 +40,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Render-compatible CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],          # <-- IMPORTANT for widget
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -124,10 +124,7 @@ def get_full_response(user_input: str) -> str:
         if isinstance(answer, str) and answer.strip():
             return answer.strip()
 
-        return (
-            "🧠 I reached OpenAI but didn't get a clear answer back. "
-            "Mind giving that another try?"
-        )
+        return "🧠 I reached OpenAI but didn’t get a clear answer. Mind trying that again?"
 
     except Exception as e:
         print(f"⚠️ Model error in get_full_response: {e!r}")
@@ -150,13 +147,14 @@ async def home(request: Request):
     return templates.TemplateResponse("chat.html", {"request": request})
 
 
+# ⭐⭐⭐⭐⭐ THIS IS THE CRITICAL FIX FOR THE WIDGET ⭐⭐⭐⭐⭐
 @app.post("/chat")
 async def chat(request: Request):
     data = await request.json()
     user_input = data.get("message", "")
     reply = get_full_response(user_input)
 
-    # ⭐ FIXED: Return plain text instead of JSON wrapper
+    # Return the raw text — NOT JSON
     return PlainTextResponse(reply)
 
 
