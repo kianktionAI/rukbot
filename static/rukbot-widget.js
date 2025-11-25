@@ -41,10 +41,12 @@ async function sendMessage(e) {
   const botDiv = document.createElement("div");
   botDiv.className = "rukbot-response";
 
-  // FIXED: extract JUST the text, not the JSON object
-  botDiv.textContent = data.response || "⚠️ Something went wrong.";
+  // ✅ FIX: show ONLY the clean text, no JSON {} wrapper
+  botDiv.textContent =
+    typeof data.response === "string"
+      ? data.response.trim()
+      : JSON.stringify(data.response);
 
   chat.appendChild(botDiv);
-
   chat.scrollTop = chat.scrollHeight;
 }
