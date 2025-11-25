@@ -1,3 +1,7 @@
+// =============================
+//  RUKBOT WIDGET SCRIPT
+// =============================
+
 async function sendMessage(e) {
   e.preventDefault();
 
@@ -8,7 +12,9 @@ async function sendMessage(e) {
 
   if (!message) return;
 
-  // --- Add user bubble ---
+  //----------------------------
+  // Add User Bubble
+  //----------------------------
   const userDiv = document.createElement("div");
   userDiv.className = "rukbot-user";
   userDiv.textContent = message;
@@ -16,14 +22,18 @@ async function sendMessage(e) {
 
   chat.scrollTop = chat.scrollHeight;
 
-  // --- Determine backend URL ---
+  //----------------------------
+  // Determine Backend URL
+  //----------------------------
   const API_URL =
     window.location.hostname.includes("localhost") ||
     window.location.hostname.includes("127.0.0.1")
       ? "http://127.0.0.1:8000/chat"
       : "https://rukbot-backend.onrender.com/chat";
 
-  // --- Call backend ---
+  //----------------------------
+  // Call Backend
+  //----------------------------
   let data;
   try {
     const res = await fetch(API_URL, {
@@ -34,19 +44,48 @@ async function sendMessage(e) {
 
     data = await res.json();
   } catch (err) {
+    console.error("RUKBOT Network Error:", err);
     data = { response: "⚠️ Connection issue — please try again in a moment!" };
   }
 
-  // --- Add bot bubble ---
+  //----------------------------
+  // Add Bot Bubble (CLEAN OUTPUT)
+  //----------------------------
   const botDiv = document.createElement("div");
   botDiv.className = "rukbot-response";
 
-  // ✅ FIX: show ONLY the clean text, no JSON {} wrapper
-  botDiv.textContent =
-    typeof data.response === "string"
-      ? data.response.trim()
-      : JSON.stringify(data.response);
+  // ✨ ALWAYS show only clean natural text — no {}, no quotes
+  let cleanText = "";
 
+  if (typeof data?.response === "string") {
+    cleanText = data.response.trim();
+  } else if (data?.response) {
+    cleanText = String(data.response).trim();
+  } else {
+    cleanText = "⚠️ Unexpected response format.";
+  }
+
+  botDiv.textContent = cleanText;
   chat.appendChild(botDiv);
+
   chat.scrollTop = chat.scrollHeight;
 }
+
+
+
+// =============================
+//  ENTER KEY HANDLER
+// =============================
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("rukbot-form");
+  const input = document.getElementById("rukbot-input");
+
+  form.addEventListener("submit", sendMessage);
+
+  input.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      form.dispatchEvent(new Event("submit"));
+    }
+  });
+});
